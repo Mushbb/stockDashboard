@@ -194,36 +194,5 @@ public class JDBC_SQL {
         
         return result;
     }
-    
-    public Integer login(String id, String password) {
-		Connection connection = null;
-		Statement statement = null;
-		ResultSet resultSet = null;
-		Integer count = 0;
-		
-		try {
-	        connection = getConnection();
-	        
-	        statement = connection.createStatement();
-	        
-	        resultSet = statement.executeQuery("SELECT COUNT(*) AS CNT FROM SM_Mem_Info WHERE MI_ID='"+id+"' AND MI_PW='"+password+"'");
-	        resultSet.next();
-	        count = resultSet.getInt("CNT");
-	        
-		} catch (SQLException e) {
-            System.err.println("Database error occurred: " + e.getMessage());
-            e.printStackTrace();
-        } finally {
-            try {
-                if (resultSet != null) resultSet.close();
-                if (statement != null) statement.close();
-                if (connection != null) connection.close();
-            } catch (SQLException e) {
-                System.err.println("Error closing resources: " + e.getMessage());
-            }
-        }
-		
-		return count;
-	}
 }
 
