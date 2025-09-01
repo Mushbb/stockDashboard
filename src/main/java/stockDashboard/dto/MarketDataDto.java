@@ -7,6 +7,7 @@ public record MarketDataDto(
     String isuSrtCd,
     String nodeName,
     Long mktcap,
+    Double fluc_rate,
     String sectorName,
     String marketType,
     LocalDate metricDate,

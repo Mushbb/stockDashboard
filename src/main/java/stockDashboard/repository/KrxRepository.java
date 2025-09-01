@@ -25,7 +25,7 @@ public class KrxRepository {
 	 */
 	public List<MarketDataDto> getLiveMarketData() {
 		String sql = """
-				SELECT m.ISU_SRT_CD, n.node_name, m.MKTCAP, s.sector_name, h.market_type, m.metric_date, m.collected_at
+				SELECT m.ISU_SRT_CD, n.node_name, m.MKTCAP, m.FLUC_RT, s.sector_name, h.market_type, m.metric_date, m.collected_at
 				FROM daily_metrics m INNER JOIN nodes n ON m.ISU_SRT_CD = n.ISU_SRT_CD
 					INNER JOIN sector_history s ON n.ISU_SRT_CD = s.stock_id
 					INNER JOIN market_history h ON n.ISU_SRT_CD = h.stock_id
@@ -53,7 +53,7 @@ public class KrxRepository {
 					FROM daily_metrics m
 					WHERE m.metric_date = ?
 				)
-				SELECT rm.ISU_SRT_CD, n.node_name, rm.MKTCAP, s.sector_name, h.market_type, rm.metric_date, rm.collected_at
+				SELECT rm.ISU_SRT_CD, n.node_name, rm.MKTCAP, rm.FLUC_RT, s.sector_name, h.market_type, rm.metric_date, rm.collected_at
 				FROM RankedMetrics rm
 					INNER JOIN nodes n ON rm.ISU_SRT_CD = n.ISU_SRT_CD
 					INNER JOIN sector_history s ON rm.ISU_SRT_CD = s.stock_id
@@ -87,6 +87,8 @@ public class KrxRepository {
 			} else if (mktcapObj instanceof Number) {
 				mktcap = ((Number) mktcapObj).longValue();
 			}
+			Object fluc_rateObj = row.get("FLUC_RT");
+			Double fluc_rate = ((BigDecimal) fluc_rateObj).doubleValue();
 
 			LocalDate metricDate = null;
 			Object metricDateObj = row.get("metric_date");
@@ -108,6 +110,7 @@ public class KrxRepository {
 					(String) row.get("ISU_SRT_CD"),
 					(String) row.get("node_name"),
 					mktcap,
+					fluc_rate,
 					(String) row.get("sector_name"),
 					(String) row.get("market_type"),
 					metricDate,

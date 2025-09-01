@@ -9,4 +9,6 @@ public class StockDashboardApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(StockDashboardApplication.class, args);
 	}
+	
+	
 }

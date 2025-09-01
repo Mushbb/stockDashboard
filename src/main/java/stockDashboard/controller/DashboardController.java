@@ -25,7 +25,7 @@ public class DashboardController {
      */
     @GetMapping("/api/market-data")
     public List<MarketDataDto> getMarketDataForTreemap(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         
         return serv.getMarketData(date);
     }
