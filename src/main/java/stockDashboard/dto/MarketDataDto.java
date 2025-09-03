@@ -8,6 +8,7 @@ public record MarketDataDto(
     String nodeName,
     Long mktcap,
     Double fluc_rate,
+    Long currentPrice,
     String sectorName,
     String marketType,
     LocalDate metricDate,
