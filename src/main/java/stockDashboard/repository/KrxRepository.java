@@ -25,13 +25,16 @@ public class KrxRepository {
 	 */
 	public List<MarketDataDto> getLiveMarketData() {
 		String sql = """
-				SELECT m.ISU_SRT_CD, n.node_name, m.MKTCAP, m.FLUC_RT, m.TDD_CLSPRC, s.sector_name, h.market_type, m.metric_date, m.collected_at
-				FROM daily_metrics m INNER JOIN nodes n ON m.ISU_SRT_CD = n.ISU_SRT_CD
-					INNER JOIN sector_history s ON n.ISU_SRT_CD = s.stock_id
-					INNER JOIN market_history h ON n.ISU_SRT_CD = h.stock_id
+				SELECT m.ISU_SRT_CD, n_hist.value AS node_name, m.MKTCAP, m.FLUC_RT, m.[TDD_CLSPRC], s_hist.value AS sector_name,
+					m_hist.value AS market_type, m.metric_date, m.collected_at
+				FROM daily_metrics m 
+					INNER JOIN stock_history n_hist ON m.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
+					INNER JOIN stock_history s_hist ON m.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
+					INNER JOIN stock_history m_hist ON m.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET'
 				WHERE m.metric_date = ( SELECT MAX(metric_date) FROM daily_metrics )
-					AND s.end_date IS NULL
-					AND h.end_date IS NULL
+					AND n_hist.end_date IS NULL
+					AND s_hist.end_date IS NULL
+					AND m_hist.end_date IS NULL
 				ORDER BY m.MKTCAP DESC
 				""";
 
@@ -51,16 +54,18 @@ public class KrxRepository {
 				WITH RankedMetrics AS (
 					SELECT m.*, ROW_NUMBER() OVER(PARTITION BY m.ISU_SRT_CD ORDER BY m.collected_at DESC) as rn
 					FROM daily_metrics m
-					WHERE m.metric_date = ?
+					WHERE m.metric_date = '2025-09-04'
 				)
-				SELECT rm.ISU_SRT_CD, n.node_name, rm.MKTCAP, rm.FLUC_RT, rm.TDD_CLSPRC, s.sector_name, h.market_type, rm.metric_date, rm.collected_at
+				SELECT rm.ISU_SRT_CD, n_hist.value AS node_name, rm.MKTCAP, rm.FLUC_RT, rm.TDD_CLSPRC,
+					s_hist.value AS sector_name, m_hist.value AS market_type, rm.metric_date, rm.collected_at
 				FROM RankedMetrics rm
-					INNER JOIN nodes n ON rm.ISU_SRT_CD = n.ISU_SRT_CD
-					INNER JOIN sector_history s ON rm.ISU_SRT_CD = s.stock_id
-					INNER JOIN market_history h ON rm.ISU_SRT_CD = h.stock_id
+					INNER JOIN stock_history n_hist ON rm.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
+					INNER JOIN stock_history s_hist ON rm.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
+					INNER JOIN stock_history m_hist ON rm.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET'
 				WHERE rm.rn = 1
-					AND rm.metric_date BETWEEN s.start_date AND ISNULL(s.end_date, '9999-12-31')
-					AND rm.metric_date BETWEEN h.start_date AND ISNULL(h.end_date, '9999-12-31')
+					AND rm.metric_date BETWEEN n_hist.start_date AND ISNULL(n_hist.end_date, '9999-12-31')
+					AND rm.metric_date BETWEEN s_hist.start_date AND ISNULL(s_hist.end_date, '9999-12-31')
+					AND rm.metric_date BETWEEN m_hist.start_date AND ISNULL(m_hist.end_date, '9999-12-31')
 				ORDER BY rm.MKTCAP DESC
 				""";
 		
