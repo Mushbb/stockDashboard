@@ -3,6 +3,7 @@ package stockDashboard.repository;
 import stockDashboard.dto.MarketDataDto;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -25,8 +26,10 @@ public class KrxRepository {
 	 */
 	public List<MarketDataDto> getLiveMarketData() {
 		String sql = """
-				SELECT m.ISU_SRT_CD, n_hist.value AS node_name, m.MKTCAP, m.FLUC_RT, m.[TDD_CLSPRC], s_hist.value AS sector_name,
-					m_hist.value AS market_type, m.metric_date, m.collected_at
+				SELECT 
+				    m.ISU_SRT_CD, n_hist.value AS node_name, s_hist.value AS sector_name, m_hist.value AS market_type,
+				    m.metric_date, m.collected_at, m.MKTCAP, m.FLUC_RT, 
+				    m.TDD_CLSPRC, m.TDD_OPNPRC, m.TDD_HGPRC, m.TDD_LWPRC, m.ACC_TRDVOL, m.ACC_TRDVAL
 				FROM daily_metrics m 
 					INNER JOIN stock_history n_hist ON m.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
 					INNER JOIN stock_history s_hist ON m.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
@@ -44,20 +47,18 @@ public class KrxRepository {
 
 	/**
 	 * 특정 날짜의 장 마감 후 시장 데이터를 시가총액 순으로 조회합니다.
-	 * 해당 날짜에 수집된 여러 데이터 중 가장 마지막에 수집된 데이터를 기준으로 합니다.
-	 *
-	 * @param date 조회할 날짜 (LocalDate)
-	 * @return 해당 날짜의 시장 데이터 DTO 리스트
 	 */
 	public List<MarketDataDto> getClosedMarketDataByDate(LocalDate date) {
 		String sql = """
 				WITH RankedMetrics AS (
 					SELECT m.*, ROW_NUMBER() OVER(PARTITION BY m.ISU_SRT_CD ORDER BY m.collected_at DESC) as rn
 					FROM daily_metrics m
-					WHERE m.metric_date = '2025-09-04'
+					WHERE m.metric_date = ?
 				)
-				SELECT rm.ISU_SRT_CD, n_hist.value AS node_name, rm.MKTCAP, rm.FLUC_RT, rm.TDD_CLSPRC,
-					s_hist.value AS sector_name, m_hist.value AS market_type, rm.metric_date, rm.collected_at
+				SELECT 
+				    rm.ISU_SRT_CD, n_hist.value AS node_name, s_hist.value AS sector_name, m_hist.value AS market_type,
+				    rm.metric_date, rm.collected_at, rm.MKTCAP, rm.FLUC_RT, 
+				    rm.TDD_CLSPRC, rm.TDD_OPNPRC, rm.TDD_HGPRC, rm.TDD_LWPRC, rm.ACC_TRDVOL, rm.ACC_TRDVAL
 				FROM RankedMetrics rm
 					INNER JOIN stock_history n_hist ON rm.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
 					INNER JOIN stock_history s_hist ON rm.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
@@ -75,54 +76,61 @@ public class KrxRepository {
 		return mapResultsToMarketDataDto(results);
 	}
 
-	/**
-	 * DB 조회 결과(List<Map>)를 DTO(List<MarketDataDto>)로 변환하는 헬퍼 메소드
-	 * @param results a list of maps, where each map represents a row
-	 * @return a list of MarketDataDto objects
-	 */
 	private List<MarketDataDto> mapResultsToMarketDataDto(List<Map<String, Object>> results) {
 		List<MarketDataDto> marketDataList = new ArrayList<>();
 
 		for (Map<String, Object> row : results) {
-			// 데이터베이스에서 반환된 Object를 DTO의 타입에 맞게 캐스팅하고 변환합니다.
-			Long mktcap = null;
-			Object mktcapObj = row.get("MKTCAP");
-			if (mktcapObj instanceof BigDecimal) {
-				mktcap = ((BigDecimal) mktcapObj).longValue();
-			} else if (mktcapObj instanceof Number) {
-				mktcap = ((Number) mktcapObj).longValue();
-			}
-			Object fluc_rateObj = row.get("FLUC_RT");
-			Double fluc_rate = ((BigDecimal) fluc_rateObj).doubleValue();
-
-			LocalDate metricDate = null;
-			Object metricDateObj = row.get("metric_date");
-			if (metricDateObj instanceof Date) {
-				metricDate = ((Date) metricDateObj).toLocalDate();
-			} else if (metricDateObj instanceof LocalDate) {
-				metricDate = (LocalDate) metricDateObj;
-			}
-
-			LocalDateTime collectedAt = null;
-			Object collectedAtObj = row.get("collected_at");
-			if (collectedAtObj instanceof Timestamp) {
-				collectedAt = ((Timestamp) collectedAtObj).toLocalDateTime();
-			} else if (collectedAtObj instanceof LocalDateTime) {
-				collectedAt = (LocalDateTime) collectedAtObj;
-			}
-
 			marketDataList.add(new MarketDataDto(
 					(String) row.get("ISU_SRT_CD"),
 					(String) row.get("node_name"),
-					mktcap,
-					fluc_rate,
-					(Long) row.get("TDD_CLSPRC"),
+					getLongValue(row, "MKTCAP"),
+					getDoubleValue(row, "FLUC_RT"),
+					getLongValue(row, "TDD_CLSPRC"),
+                    getLongValue(row, "TDD_OPNPRC"),
+                    getLongValue(row, "TDD_HGPRC"),
+                    getLongValue(row, "TDD_LWPRC"),
+                    getLongValue(row, "ACC_TRDVOL"),
+                    getLongValue(row, "ACC_TRDVAL"),
 					(String) row.get("sector_name"),
 					(String) row.get("market_type"),
-					metricDate,
-					collectedAt));
+					getLocalDateValue(row, "metric_date"),
+					getLocalDateTimeValue(row, "collected_at")
+            ));
 		}
 
 		return marketDataList;
 	}
+
+    // --- Helper methods for safe type casting ---
+    private Long getLongValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return null;
+    }
+
+    private Double getDoubleValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return null;
+    }
+
+    private LocalDate getLocalDateValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value instanceof Date) {
+            return ((Date) value).toLocalDate();
+        }
+        return null;
+    }
+
+    private LocalDateTime getLocalDateTimeValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value instanceof Timestamp) {
+            return ((Timestamp) value).toLocalDateTime();
+        }
+        return null;
+    }
 }

@@ -8,7 +8,12 @@ public record MarketDataDto(
     String nodeName,
     Long mktcap,
     Double fluc_rate,
-    Long currentPrice,
+    Long currentPrice, // TDD_CLSPRC
+    Long openPrice,    // TDD_OPNPRC
+    Long highPrice,    // TDD_HGPRC
+    Long lowPrice,     // TDD_LWPRC
+    Long tradeVolume,  // ACC_TRDVOL
+    Long tradeValue,   // ACC_TRDVAL
     String sectorName,
     String marketType,
     LocalDate metricDate,

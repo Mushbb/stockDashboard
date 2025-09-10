@@ -1,0 +1,11 @@
+package stockDashboard.dto;
+
+// 범용 랭킹 테이블의 각 항목을 나타내는 DTO
+public record RankItemDto(
+    int rank,          // 순위
+    String name,       // 종목명
+    long currentPrice, // 현재가
+    double changeRate, // 등락률
+    long volume,       // 거래량
+    long marketCap     // 시가총액
+) {}
