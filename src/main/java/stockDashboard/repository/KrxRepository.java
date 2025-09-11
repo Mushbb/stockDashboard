@@ -34,7 +34,7 @@ public class KrxRepository {
 					INNER JOIN stock_history n_hist ON m.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
 					INNER JOIN stock_history s_hist ON m.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
 					INNER JOIN stock_history m_hist ON m.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET'
-				WHERE m.metric_date = ( SELECT MAX(metric_date) FROM daily_metrics )
+				WHERE m.collected_at = ( SELECT MAX(collected_at) FROM daily_metrics )
 					AND n_hist.end_date IS NULL
 					AND s_hist.end_date IS NULL
 					AND m_hist.end_date IS NULL

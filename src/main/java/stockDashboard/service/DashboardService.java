@@ -45,10 +45,15 @@ public class DashboardService {
             cache.put("treemap_KOSDAQ", kosdaqTreemap);
 
             // --- 랭킹 데이터 가공 및 캐싱 추가 ---
-            cache.put("rank_KOSPI_MARKET_CAP", createRankData(liveMarketData, "KOSPI", "MARKET_CAP", 100));
-            cache.put("rank_KOSDAQ_MARKET_CAP", createRankData(liveMarketData, "KOSDAQ", "MARKET_CAP", 100));
-            cache.put("rank_ALL_CHANGE_RATE", createRankData(liveMarketData, "ALL", "CHANGE_RATE", 100));
-            cache.put("rank_ALL_VOLUME", createRankData(liveMarketData, "ALL", "VOLUME", 100));
+            cache.put("rank_KOSPI_MARKET_CAP_DESC", createRankData(liveMarketData, "KOSPI", "MARKET_CAP", "DESC", 100));
+            cache.put("rank_KOSDAQ_MARKET_CAP_DESC", createRankData(liveMarketData, "KOSDAQ", "MARKET_CAP", "DESC", 100));
+            cache.put("rank_ALL_CHANGE_RATE_DESC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "DESC", 100));
+            cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100)); // 하한가
+            cache.put("rank_ALL_VOLUME_DESC", createRankData(liveMarketData, "ALL", "VOLUME", "DESC", 100));
+            
+            // Top & Bottom 데이터 캐싱
+            List<RankItemDto> topAndBottom = createTopAndBottomRankData(liveMarketData, "ALL", 100);
+            cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", topAndBottom);
             // -------------------------------------
 
             log.info("시장 데이터 캐시 업데이트 완료.");
@@ -59,8 +64,6 @@ public class DashboardService {
 
     /**
      * 캐시에서 지정된 시장의 트리맵 데이터를 조회합니다.
-     * @param marketType "KOSPI" 또는 "KOSDAQ"
-     * @return 캐시된 TreemapDto
      */
     public TreemapDto getTreemapData(String marketType) {
         log.info("캐시에서 {} 트리맵 데이터를 조회합니다.", marketType.toUpperCase());
@@ -69,41 +72,61 @@ public class DashboardService {
 
     /**
      * 캐시에서 각종 순위 데이터를 조회합니다.
-     * @param by 정렬 기준 (MARKET_CAP, CHANGE_RATE, VOLUME)
-     * @param market 시장 구분 (KOSPI, KOSDAQ, ALL)
-     * @param limit 반환할 개수
-     * @return RankItemDto 리스트
      */
     @SuppressWarnings("unchecked")
-    public List<RankItemDto> getRankData(String by, String market, int limit) {
-        String cacheKey = String.format("rank_%s_%s", market.toUpperCase(), by.toUpperCase());
+    public List<RankItemDto> getRankData(String by, String market, String order, int limit) {
+        String cacheKey = String.format("rank_%s_%s_%s", market.toUpperCase(), by.toUpperCase(), order.toUpperCase());
         log.info("캐시에서 {} 키로 랭킹 데이터를 조회합니다.", cacheKey);
         List<RankItemDto> cachedData = (List<RankItemDto>) cache.get(cacheKey);
         if (cachedData == null) {
             return List.of();
         }
-        // limit 만큼 잘라서 반환
         return cachedData.stream().limit(limit).toList();
     }
     
     /**
+     * 캐시에서 등락률 상위/하위 혼합 데이터를 조회합니다.
+     */
+    @SuppressWarnings("unchecked")
+    public List<RankItemDto> getTopAndBottomRankData(String market, int limit) {
+        String cacheKey = String.format("rank_%s_CHANGE_RATE_TOP_AND_BOTTOM", market.toUpperCase());
+        log.info("캐시에서 {} 키로 Top & Bottom 랭킹 데이터를 조회합니다.", cacheKey);
+        List<RankItemDto> cachedData = (List<RankItemDto>) cache.get(cacheKey);
+        if (cachedData == null) {
+            return List.of();
+        }
+        
+        int halfLimit = limit / 2;
+        List<RankItemDto> top = cachedData.stream()
+                                .filter(d -> d.changeRate() >= 0)
+                                .limit(halfLimit).toList();
+        List<RankItemDto> bottom = cachedData.stream()
+                                 .filter(d -> d.changeRate() < 0)
+                                 .sorted(java.util.Comparator.comparing(RankItemDto::changeRate))
+                                 .limit(halfLimit)
+                                 .sorted(java.util.Comparator.comparing(RankItemDto::changeRate).reversed())
+                                 .toList();
+
+        return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
+    }
+
+    /**
      * 원본 데이터를 기준으로 각종 순위 DTO 리스트를 생성합니다.
      */
-    private List<RankItemDto> createRankData(List<MarketDataDto> flatData, String market, String by, int limit) {
-        // 1. 시장 필터링
+    private List<RankItemDto> createRankData(List<MarketDataDto> flatData, String market, String by, String order, int limit) {
         List<MarketDataDto> filteredData = flatData.stream()
                 .filter(d -> "ALL".equalsIgnoreCase(market) || market.equalsIgnoreCase(d.marketType()))
                 .toList();
 
-        // 2. 정렬 기준(by)에 따라 Comparator 설정
         java.util.Comparator<MarketDataDto> comparator = switch (by.toUpperCase()) {
             case "MARKET_CAP" -> java.util.Comparator.comparing(MarketDataDto::mktcap, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
-            case "CHANGE_RATE" -> java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
-            case "VOLUME" -> java.util.Comparator.comparing(MarketDataDto::tradeVolume, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())); // 거래량 기준 정렬
+            case "VOLUME" -> java.util.Comparator.comparing(MarketDataDto::tradeVolume, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+            case "CHANGE_RATE" -> "asc".equalsIgnoreCase(order)
+                    ? java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                    : java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
             default -> java.util.Comparator.comparing(MarketDataDto::mktcap, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
         };
 
-        // 3. 정렬 및 limit, DTO 변환
         java.util.concurrent.atomic.AtomicInteger rank = new java.util.concurrent.atomic.AtomicInteger(1);
         return filteredData.stream()
                 .sorted(comparator)
@@ -113,10 +136,16 @@ public class DashboardService {
                         d.nodeName(),
                         d.currentPrice() != null ? d.currentPrice() : 0L,
                         d.fluc_rate() != null ? d.fluc_rate() : 0.0,
-                        d.tradeVolume() != null ? d.tradeVolume() : 0L, // 수정된 부분
+                        d.tradeVolume() != null ? d.tradeVolume() : 0L,
                         d.mktcap() != null ? d.mktcap() : 0L
                 ))
                 .toList();
+    }
+
+    private List<RankItemDto> createTopAndBottomRankData(List<MarketDataDto> flatData, String market, int limit) {
+        List<RankItemDto> top = createRankData(flatData, market, "CHANGE_RATE", "DESC", limit);
+        List<RankItemDto> bottom = createRankData(flatData, market, "CHANGE_RATE", "ASC", limit);
+        return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
     }
     
     /**

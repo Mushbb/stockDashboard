@@ -39,7 +39,18 @@ public class DashboardController {
     public List<RankItemDto> getRankData(
             @RequestParam("by") String by,
             @RequestParam(value = "market", defaultValue = "ALL") String market,
+            @RequestParam(value = "order", defaultValue = "DESC") String order,
             @RequestParam(value = "limit", defaultValue = "10") int limit) {
-        return serv.getRankData(by, market, limit);
+        return serv.getRankData(by, market, order, limit);
+    }
+
+    /**
+     * 등락률 상위/하위 데이터를 함께 반환하는 API 엔드포인트입니다.
+     */
+    @GetMapping("/api/market/rank/top-and-bottom")
+    public List<RankItemDto> getTopAndBottomRankData(
+            @RequestParam(value = "market", defaultValue = "ALL") String market,
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
+        return serv.getTopAndBottomRankData(market, limit);
     }
 }
