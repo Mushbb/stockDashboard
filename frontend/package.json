@@ -12,7 +12,8 @@
   "dependencies": {
     "d3": "^7.9.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-grid-layout": "^1.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

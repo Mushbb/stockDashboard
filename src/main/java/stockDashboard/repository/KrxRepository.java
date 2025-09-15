@@ -2,8 +2,6 @@ package stockDashboard.repository;
 
 import stockDashboard.dto.MarketDataDto;
 
-import java.math.BigDecimal;
-import java.util.Optional;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -12,13 +10,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import lombok.RequiredArgsConstructor;
 
-@RequiredArgsConstructor
 @Repository
 public class KrxRepository {
-	private final JDBC_SQL jdbc_sql;
+	private final JdbcTemplate jdbcTemplate;
+
+    public KrxRepository(@Qualifier("appJdbcTemplate") JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 	
 	/**
 	 * 가장 최근 날짜의 장중 시장 데이터를 시가총액 순으로 조회합니다.
@@ -41,7 +43,7 @@ public class KrxRepository {
 				ORDER BY m.MKTCAP DESC
 				""";
 
-		List<Map<String, Object>> results = jdbc_sql.executeSelect(sql, null);
+		List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
 		return mapResultsToMarketDataDto(results);
 	}
 
@@ -71,7 +73,7 @@ public class KrxRepository {
 				""";
 		
 		Object[] params = { date };
-		List<Map<String, Object>> results = jdbc_sql.executeSelect(sql, params);
+		List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, params);
 
 		return mapResultsToMarketDataDto(results);
 	}
