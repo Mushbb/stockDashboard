@@ -2,6 +2,9 @@ import React from 'react';
 import { DataProvider } from './contexts/DataProvider';
 import Dashboard from './components/Dashboard';
 
+import 'react-resizable/css/styles.css';
+import 'react-grid-layout/css/styles.css';
+
 /**
  * 애플리케이션의 최상위 컴포넌트입니다.
  * 이제 복잡한 로직 없이, 필요한 Provider와 메인 컴포넌트를 조립하는 역할만 합니다.

@@ -30,10 +30,8 @@ public class DataInitializer implements CommandLineRunner {
         String username = "admin";
         String checkUserSql = "SELECT COUNT(*) FROM users WHERE username = ?";
         
-        // 'auth' 데이터 소스를 사용하여 사용자 존재 여부 확인
         Integer userCount = jdbcTemplate.queryForObject(checkUserSql, new Object[]{username}, Integer.class);
 
-        // 사용자가 존재하지 않으면 생성
         if (userCount == null || userCount == 0) {
             log.info("기본 관리자 계정 '{}'가 존재하지 않습니다. 새로 생성합니다.", username);
             

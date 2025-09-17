@@ -1,144 +1,39 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import * as d3 from 'd3';
+import React from 'react';
 
-function ChartContainer({ title, children, initialPosition = { x: 0, y: 0 }, initialSize = { width: 500, height: 500 } }) {
-	const containerRef = useRef(null);
-	const ghostFrameRef = useRef(null);
-	const moveRef = useRef(null);
-	const resizeRef = useRef(null);
-
-	const [layoutSize, setLayoutSize] = useState(initialSize);
-	const [position, setPosition] = useState(initialPosition);
-	const [isInteracting, setIsInteracting] = useState(false);
-
-	useLayoutEffect(() => {
-		if (containerRef.current) {
-			containerRef.current.style.transform = 'translate(0px, 0px)';
-		}
-	}, [position]);
-
-	useEffect(() => {
-		if (!containerRef.current) return;
-		const containerSelection = d3.select(containerRef.current);
-
-		const dragHandle = containerSelection.select('.drag-handle');
-		const moveBehavior = d3.drag()
-			.on('start', (event) => {
-				event.sourceEvent.stopPropagation();
-				setIsInteracting(true);
-				moveRef.current = {
-					startX: event.sourceEvent.clientX,
-					startY: event.sourceEvent.clientY,
-				};
-			})
-			.on('drag', (event) => {
-				if (!moveRef.current) return;
-				const dx = event.sourceEvent.clientX - moveRef.current.startX;
-				const dy = event.sourceEvent.clientY - moveRef.current.startY;
-				containerRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
-			})
-			.on('end', (event) => {
-				if (!moveRef.current) return;
-				const dx = event.sourceEvent.clientX - moveRef.current.startX;
-				const dy = event.sourceEvent.clientY - moveRef.current.startY;
-				setPosition(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-				setIsInteracting(false);
-				moveRef.current = null;
-			});
-		dragHandle.call(moveBehavior);
-
-		const resizeHandle = containerSelection.select('.resize-handle');
-		const resizeBehavior = d3.drag()
-			.on('start', function (event) {
-				event.sourceEvent.preventDefault();
-				event.sourceEvent.stopPropagation();
-				setIsInteracting(true);
-				resizeRef.current = {
-					width: layoutSize.width, height: layoutSize.height,
-					x: event.sourceEvent.clientX, y: event.sourceEvent.clientY
-				};
-				if (ghostFrameRef.current) {
-					ghostFrameRef.current.style.width = `${layoutSize.width}px`;
-					ghostFrameRef.current.style.height = `${layoutSize.height}px`;
-					ghostFrameRef.current.style.display = 'block';
-				}
-			})
-			.on('drag', function (event) {
-				if (!resizeRef.current) return;
-				const newWidth = Math.max(300, resizeRef.current.width + (event.sourceEvent.clientX - resizeRef.current.x));
-				const newHeight = Math.max(300, resizeRef.current.height + (event.sourceEvent.clientY - resizeRef.current.y));
-				if (ghostFrameRef.current) {
-					ghostFrameRef.current.style.width = `${newWidth}px`;
-					ghostFrameRef.current.style.height = `${newHeight}px`;
-				}
-			})
-			.on('end', function (event) {
-				setIsInteracting(false);
-				if (ghostFrameRef.current) ghostFrameRef.current.style.display = 'none';
-				if (!resizeRef.current) return;
-				const finalWidth = Math.max(300, resizeRef.current.width + (event.sourceEvent.clientX - resizeRef.current.x));
-				const finalHeight = Math.max(300, resizeRef.current.height + (event.sourceEvent.clientY - resizeRef.current.y));
-				setLayoutSize({ width: finalWidth, height: finalHeight });
-				resizeRef.current = null;
-			});
-		resizeHandle.call(resizeBehavior);
-
-	}, [position, layoutSize]);
-
+/**
+ * 위젯의 공통적인 시각적 스타일(테두리, 배경 등)을 제공하는 단순한 컨테이너 컴포넌트입니다.
+ * 드래그, 리사이즈 등 모든 동적 기능은 react-grid-layout이 담당합니다.
+ */
+function ChartContainer({ title, children }) {
 	return (
-		<div
-			ref={containerRef}
-			style={{
-				position: 'absolute',
-				top: `${position.y}px`,
-				left: `${position.x}px`,
-				zIndex: isInteracting ? 10 : 1,
-				width: `${layoutSize.width}px`,
-				height: `${layoutSize.height}px`,
-				padding: '10px',
-				boxSizing: 'border-box',
-				boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-				borderRadius: '8px',
-				display: 'flex',
-				flexDirection: 'column',
-				backgroundColor: '#fff',
-			}}
-		>
-			<h2
-				className="drag-handle"
-				style={{
-					fontSize: '1.2em',
-					color: '#333',
-					padding: '0 10px',
-					margin: '10px 0',
-					flexShrink: 0,
-					cursor: 'move',
-					userSelect: 'none',
-				}}
-			>
+		<div style={{
+			width: '100%',
+			height: '100%',
+			display: 'flex',
+			flexDirection: 'column',
+            border: '1px solid #ddd',
+            background: 'white',
+            borderRadius: '8px'
+		}}>
+			{/* 제목 표시줄 - react-grid-layout의 드래그 핸들 역할 */}
+			<h3 
+                className="widget-title" 
+                style={{
+                    padding: '10px', 
+                    margin: 0, 
+                    borderBottom: '1px solid #ddd', 
+                    background: '#f9f9f9', 
+                    cursor: 'move',
+                    userSelect: 'none'
+                }}
+            >
 				{title}
-			</h2>
+			</h3>
 
-			<div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
-                {/* React.cloneElement를 사용하여 자식에게 크기 props 전달 */}
-                {React.Children.map(children, child => 
-                    React.cloneElement(child, { 
-                        width: layoutSize.width - 20, // 패딩 고려
-                        height: layoutSize.height - 105 // 헤더 및 패딩 고려
-                    })
-                )}
+			{/* 컨텐츠 영역 */}
+			<div style={{ width: '100%', height: 'calc(100% - 40px)' }}>
+                {children}
 			</div>
-
-			<div className="resize-handle" style={{
-				position: 'absolute', bottom: 0, right: 0,
-				width: '20px', height: '20px', cursor: 'nwse-resize',
-				clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', backgroundColor: '#666',
-			}}></div>
-			<div ref={ghostFrameRef} style={{
-				position: 'absolute', top: 0, left: 0,
-				border: '2px dashed #007bff', pointerEvents: 'none',
-				boxSizing: 'border-box', display: isInteracting && resizeRef.current ? 'block' : 'none',
-			}}></div>
 		</div>
 	);
 }

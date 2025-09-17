@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import stockDashboard.dto.MarketDataDto;
@@ -28,6 +29,14 @@ public class DashboardService {
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
 
     /**
+     * 애플리케이션 시작 시 즉시 캐시를 초기화합니다.
+     */
+    @PostConstruct
+    public void initCache() {
+        updateMarketDataCache();
+    }
+
+    /**
      * 5분마다 실행되어 DB에서 최신 시장 데이터를 가져와 DTO로 가공 후 캐시에 저장합니다.
      */
     @Scheduled(fixedRate = 300000)
@@ -36,13 +45,15 @@ public class DashboardService {
         try {
             List<MarketDataDto> liveMarketData = krxRepository.getLiveMarketData();
 
-            // KOSPI와 KOSDAQ 데이터를 트리맵 구조로 각각 가공
+            // KOSPI, KOSDAQ, ALL 데이터를 트리맵 구조로 각각 가공
             TreemapDto kospiTreemap = transformToTreemapDto(liveMarketData, "KOSPI");
             TreemapDto kosdaqTreemap = transformToTreemapDto(liveMarketData, "KOSDAQ");
+            TreemapDto allTreemap = transformToTreemapDto(liveMarketData, "ALL");
 
-            // 가공된 최종 DTO를 캐시에 저장
+            // 가공된 최종 DTO를 명확히 분리된 키로 캐시에 저장
             cache.put("treemap_KOSPI", kospiTreemap);
             cache.put("treemap_KOSDAQ", kosdaqTreemap);
+            cache.put("treemap_ALL", allTreemap);
 
             // --- 랭킹 데이터 가공 및 캐싱 추가 ---
             cache.put("rank_KOSPI_MARKET_CAP_DESC", createRankData(liveMarketData, "KOSPI", "MARKET_CAP", "DESC", 100));
@@ -51,10 +62,8 @@ public class DashboardService {
             cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100)); // 하한가
             cache.put("rank_ALL_VOLUME_DESC", createRankData(liveMarketData, "ALL", "VOLUME", "DESC", 100));
             
-            // Top & Bottom 데이터 캐싱
             List<RankItemDto> topAndBottom = createTopAndBottomRankData(liveMarketData, "ALL", 100);
             cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", topAndBottom);
-            // -------------------------------------
 
             log.info("시장 데이터 캐시 업데이트 완료.");
         } catch (Exception e) {
@@ -66,8 +75,9 @@ public class DashboardService {
      * 캐시에서 지정된 시장의 트리맵 데이터를 조회합니다.
      */
     public TreemapDto getTreemapData(String marketType) {
-        log.info("캐시에서 {} 트리맵 데이터를 조회합니다.", marketType.toUpperCase());
-        return (TreemapDto) cache.get("treemap_" + marketType.toUpperCase());
+        String cacheKey = "treemap_" + marketType.toUpperCase();
+        log.info("캐시에서 {} 키로 트리맵 데이터를 조회합니다.", cacheKey);
+        return (TreemapDto) cache.get(cacheKey);
     }
 
     /**
@@ -155,10 +165,12 @@ public class DashboardService {
      * @return D3.js가 사용하는 계층 구조와 동일한 TreemapDto
      */
     private TreemapDto transformToTreemapDto(List<MarketDataDto> flatData, String marketName) {
-        // 1. 해당 시장 데이터만 필터링
-        List<MarketDataDto> marketSpecificData = flatData.stream()
-                .filter(d -> marketName.equalsIgnoreCase(d.marketType()))
-                .toList();
+        // 1. 해당 시장 데이터만 필터링 ("ALL" 이면 전체 데이터 사용)
+        List<MarketDataDto> marketSpecificData = "ALL".equalsIgnoreCase(marketName)
+                ? flatData
+                : flatData.stream()
+                    .filter(d -> marketName.equalsIgnoreCase(d.marketType()))
+                    .toList();
 
         if (marketSpecificData.isEmpty()) {
             return new TreemapDto(marketName, List.of());
@@ -186,6 +198,8 @@ public class DashboardService {
                     return new TreemapSectorDto(sectorName, stockChildren);
                 }).toList();
 
-        return new TreemapDto(marketName, sectorChildren);
+        // "ALL"일 경우 최상위 이름을 "통합 시장"으로 설정
+        String rootName = "ALL".equalsIgnoreCase(marketName) ? "통합 시장" : marketName;
+        return new TreemapDto(rootName, sectorChildren);
     }
 }

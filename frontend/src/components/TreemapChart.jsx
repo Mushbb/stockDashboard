@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 
-// ... (헬퍼 함수들은 변경 없이 그대로 유지) ...
+// Helper functions (unchanged)
 function pruneByPixel(root, minPixel) {
 	const keep = new Set();
 	root.leaves().forEach(leaf => {
@@ -27,9 +27,7 @@ function pruneByPixel(root, minPixel) {
 }
 const getNodePath = (node) => node.ancestors().map(d => d.data.name).reverse();
 const findNodeByPath = (root, path) => {
-	if (!root || !path || path.length === 0 || root.data.name !== path[0]) {
-		return null;
-	}
+	if (!root || !path || path.length === 0 || root.data.name !== path[0]) return null;
 	let current = root;
 	for (let i = 1; i < path.length; i++) {
 		const name = path[i];
@@ -39,61 +37,49 @@ const findNodeByPath = (root, path) => {
 	}
 	return current;
 };
-const logState = () => {}; // 로그 함수는 비활성화
 
-// 1. props로 marketType을 받도록 수정
-function TreemapChart({ marketType, width, height }) {
-    // 2. 데이터와 로딩/에러 상태를 내부에서 관리
+function TreemapChart({ widgetId, settings, width, height }) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    // settings.marketType을 명시적으로 확인하고, 없으면 'ALL'을 기본값으로 사용
+    const [currentMarket, setCurrentMarket] = useState(settings && settings.marketType ? settings.marketType : 'ALL');
 
-	const [view, setView] = useState(null);
-	const [colorScale, setColorScale] = useState(null);
+    const [view, setView] = useState(null);
+    const [colorScale, setColorScale] = useState(null);
+    
+    const svgRef = useRef(null);
+	const svgContainerRef = useRef(null); // SVG 컨테이너를 위한 ref 추가
+    const currentPathRef = useRef(null);
 	
-	const svgRef = useRef(null);
-	const currentPathRef = useRef(null);
-	
-	const MIN_PIXEL = 15;
+    const MIN_PIXEL = 15;
 
-    // 3. marketType을 기반으로 데이터를 fetch하는 useEffect 추가
     useEffect(() => {
-		const fetchData = async () => {
-			setIsLoading(true);
+        const fetchData = async () => {
+            setIsLoading(true);
             setError(null);
-			try {
-				const response = await fetch(`/api/charts/treemap/${marketType.toLowerCase()}`);
-				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
-				}
-				const result = await response.json();
-				setData(result);
-			} catch (e) {
-				setError(e.message);
-				console.error("Failed to fetch treemap data:", e);
-			} finally {
-				setIsLoading(false);
-			}
-		};
+            try {
+                const response = await fetch(`/api/charts/treemap/${currentMarket.toLowerCase()}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                setData(result);
+            } catch (e) {
+                setError(e.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchData();
+    }, [currentMarket]);
 
-		fetchData();
-
-		const intervalId = setInterval(fetchData, 300000); // 5분마다 갱신
-
-		return () => clearInterval(intervalId);
-	}, [marketType]);
-	
-	useEffect(() => {
+    useEffect(() => {
 		const color = d3.scaleDivergingPow().domain([-30, 0, 30]).exponent(0.15)
 			.interpolator(d3.interpolateRgbBasis(["#d14242", "#f0f0f0", "#33a033"])).clamp(true);
 		setColorScale(() => color);
 	}, []);
-	
-	useEffect(() => {
-		if (!data || !data.children || data.children.length === 0) {
-			return;
-		}
-		
+
+    useEffect(() => {
+		if (!data || !data.children || data.children.length === 0) return;
 		let newRoot = d3.hierarchy(data).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
 		newRoot.eachAfter(node => {
 			if (node.children) {
@@ -101,12 +87,10 @@ function TreemapChart({ marketType, width, height }) {
 				node.data.fluc_rate = total > 0 ? d3.sum(node.children, d => (d.data.fluc_rate || 0) * d.value) / total : 0;
 			}
 		});
-		
 		let newViewTarget;
 		if (currentPathRef.current) {
 			newViewTarget = findNodeByPath(newRoot, currentPathRef.current);
 			if (!newViewTarget) {
-				console.error('❗️ 탐색 실패! newViewTarget이 null입니다. 루트로 돌아갑니다.');
 				newViewTarget = newRoot;
 			}
 			setView(newViewTarget || newRoot);
@@ -115,32 +99,36 @@ function TreemapChart({ marketType, width, height }) {
 			setView(newRoot);
 		}
 	}, [data]);
-	
-	
-	useEffect(() => {
-        // ... (렌더링 로직은 이전과 동일, 버그 수정된 상태) ...
-		logState('Render View', view, currentPathRef.current);
-		
+
+    const handleMarketChange = (newMarket) => {
+        if (newMarket === currentMarket) return;
+        setCurrentMarket(newMarket);
+        const newSettings = { ...settings, marketType: newMarket };
+        fetch(`/api/widgets/${widgetId}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings),
+        }).catch(error => {
+            console.error(`Failed to save settings for widget ${widgetId}:`, error);
+        });
+    };
+
+    useEffect(() => {
 		if (!view || !colorScale || width <= 0 || height <= 0) {
 			const svg = d3.select(svgRef.current);
 			svg.selectAll('*').remove();
 			return;
 		}
-		
 		const rootForLayout = view.copy();
 		const treemap = d3.treemap().tile(d3.treemapSquarify).size([width, height]).padding(2).round(true);
 		treemap(rootForLayout);
-		
 		const prunedData = pruneByPixel(rootForLayout, MIN_PIXEL);
 		let displayRoot = d3.hierarchy(prunedData).sum(d => d.value || 0).sort((a, b) => b.value - a.value);
 		treemap(displayRoot);
-		
 		const x = d3.scaleLinear().rangeRound([0, width]).domain([displayRoot.x0, displayRoot.x1]);
 		const y = d3.scaleLinear().rangeRound([0, height]).domain([displayRoot.y0, displayRoot.y1]);
-		
 		const svg = d3.select(svgRef.current).attr('width', width).attr('height', height);
 		svg.selectAll('*').remove();
-		
 		svg.on('contextmenu', (event) => {
 			event.preventDefault();
 			if (view && view.parent) {
@@ -148,7 +136,6 @@ function TreemapChart({ marketType, width, height }) {
 				setView(view.parent);
 			}
 		});
-		
 		const group = svg.append('g');
 		const cell = group.selectAll('g').data(displayRoot.children || []).join('g')
 			.attr('transform', d => `translate(${x(d.x0)}, ${y(d.y0)})`)
@@ -162,12 +149,10 @@ function TreemapChart({ marketType, width, height }) {
 					}
 				}
 			});
-		
 		cell.append('rect')
 			.attr('fill', d => colorScale(d.data.fluc_rate))
 			.attr('width', d => x(d.x1) - x(d.x0))
 			.attr('height', d => y(d.y1) - y(d.y0));
-		
 		cell.each(function (d) {
 			const node = d3.select(this);
 			const w = x(d.x1) - x(d.x0);
@@ -181,26 +166,49 @@ function TreemapChart({ marketType, width, height }) {
 				div.append('xhtml:p').style('margin', '2px 0 0 0').style('padding', '0').text(`${rate > 0 ? '+' : ''}${rate.toFixed(2)}%`);
 			}
 		});
-		
-		cell.append('title').text(d => `${d.data.name}\n`+(isNaN(d.data.cur_price)?"":`현재가: ${d3.format(",")(d.data.cur_price)} 원\n`)
-			+`등락률: ${(d.data.fluc_rate || 0).toFixed(2)}%\n시가총액: ${d.value?.toLocaleString()} 원`);
-		
-	}, [view, colorScale, width, height]);
-	
-	return (
-		<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-			{/* --- 2. 뒤로가기 버튼 제거, 제목(경로) UI는 유지 --- */}
-			<div style={{ flexShrink: 0, height: '30px', textAlign: 'left', paddingLeft: '5px' }}>
-				<h3 style={{ margin: '5px 0', fontSize: '1em', color: '#555', minHeight: '1.2em', fontWeight: 'normal' }}>
-					{view && view.ancestors().reverse().map(d => d.data.name).join(' > ')}
-				</h3>
-			</div>
-			{/* ---------------------------------------------------- */}
-			<div style={{ flexGrow: 1, width: '100%', height: '100%' }}>
-				<svg ref={svgRef} style={{ userSelect: 'none' }}></svg>
-			</div>
-		</div>
-	);
+        
+        cell.append('title').text(d => `${d.data.name}\n`+(isNaN(d.data.cur_price)?"":`현재가: ${d3.format(",")(d.data.cur_price)} 원\n`)
+            +`등락률: ${(d.data.fluc_rate || 0).toFixed(2)}%\n시가총액: ${d.value?.toLocaleString()} 원`);
+        
+    }, [view, colorScale, width, height]);
+    
+    return (
+        <div 
+            style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 5px', height: '40px', flexShrink: 0 }}>
+                <h3 style={{ margin: '0', fontSize: '1em', color: '#555', fontWeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {view && view.ancestors().reverse().map(d => d.data.name).join(' > ')}
+                </h3>
+                <div>
+                    {['ALL', 'KOSPI', 'KOSDAQ'].map(market => (
+                        <button 
+                            key={market}
+                            onClick={() => handleMarketChange(market)}
+                            style={{
+                                background: currentMarket === market ? '#007bff' : '#eee',
+                                color: currentMarket === market ? 'white' : 'black',
+                                border: 'none', 
+                                padding: '4px 8px', 
+                                margin: '0 2px', 
+                                cursor: 'pointer',
+                                borderRadius: '4px'
+                            }}
+                        >
+                            {market}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div style={{ flexGrow: 1, width: '100%' }}>
+                {isLoading && <div style={{textAlign: 'center', paddingTop: '50px'}}>Loading...</div>}
+                {error && <div style={{textAlign: 'center', paddingTop: '50px', color: 'red'}}>Error: {error}</div>}
+                {!isLoading && !error && <svg ref={svgRef} style={{ userSelect: 'none' }}></svg>}
+            </div>
+        </div>
+    );
 }
 
 export default TreemapChart;
