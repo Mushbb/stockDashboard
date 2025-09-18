@@ -4,7 +4,7 @@ import React from 'react';
  * 위젯의 공통적인 시각적 스타일(테두리, 배경 등)을 제공하는 단순한 컨테이너 컴포넌트입니다.
  * 드래그, 리사이즈 등 모든 동적 기능은 react-grid-layout이 담당합니다.
  */
-function ChartContainer({ title, children }) {
+function ChartContainer({ title, isEditMode, onRename, onDelete, children }) {
 	return (
 		<div style={{
 			width: '100%',
@@ -24,14 +24,23 @@ function ChartContainer({ title, children }) {
                     borderBottom: '1px solid #ddd', 
                     background: '#f9f9f9', 
                     cursor: 'move',
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
                 }}
             >
-				{title}
+                <span>{title}</span>
+                {isEditMode && (
+                    <div>
+                        <button onClick={onRename} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em'}}>✏️</button>
+                        <button onClick={onDelete} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em'}}>🗑️</button>
+                    </div>
+                )}
 			</h3>
 
 			{/* 컨텐츠 영역 */}
-			<div style={{ width: '100%', height: 'calc(100% - 40px)' }}>
+			<div style={{ width: '100%', height: 'calc(100% - 40px)', overflow: 'hidden' }}>
                 {children}
 			</div>
 		</div>

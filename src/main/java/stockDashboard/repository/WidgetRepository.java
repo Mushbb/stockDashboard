@@ -33,6 +33,16 @@ public class WidgetRepository {
         return jdbcTemplate.update(sql, widgetSettings, userId, widgetId);
     }
 
+    public int updateWidgetName(long userId, long widgetId, String widgetName) {
+        String sql = "UPDATE user_widgets SET widget_name = ? WHERE user_id = ? AND widget_id = ?";
+        return jdbcTemplate.update(sql, widgetName, userId, widgetId);
+    }
+
+    public int deleteWidget(long userId, long widgetId) {
+        String sql = "DELETE FROM user_widgets WHERE user_id = ? AND widget_id = ?";
+        return jdbcTemplate.update(sql, userId, widgetId);
+    }
+
     // widget_name을 포함하도록 수정
     public int insertWidget(long userId, String widgetName, String widgetType, String layoutInfo, String widgetSettings) {
         String sql = "INSERT INTO user_widgets (user_id, widget_name, widget_type, layout_info, widget_settings) VALUES (?, ?, ?, ?, ?)";

@@ -27,6 +27,14 @@ public class WidgetService {
         widgetRepository.updateWidgetSettings(userId, widgetId, widgetSettings);
     }
 
+    public void updateWidgetName(long userId, long widgetId, String widgetName) {
+        widgetRepository.updateWidgetName(userId, widgetId, widgetName);
+    }
+
+    public void deleteWidget(long userId, long widgetId) {
+        widgetRepository.deleteWidget(userId, widgetId);
+    }
+
     /**
      * 새로운 위젯을 추가합니다.
      */
