@@ -61,6 +61,7 @@ public class DashboardService {
             cache.put("rank_ALL_CHANGE_RATE_DESC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "DESC", 100));
             cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100)); // 하한가
             cache.put("rank_ALL_VOLUME_DESC", createRankData(liveMarketData, "ALL", "VOLUME", "DESC", 100));
+            cache.put("rank_ALL_TRADE_VALUE_DESC", createRankData(liveMarketData, "ALL", "TRADE_VALUE", "DESC", 100)); // 거래대금 캐싱 추가
             
             List<RankItemDto> topAndBottom = createTopAndBottomRankData(liveMarketData, "ALL", 100);
             cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", topAndBottom);
@@ -131,6 +132,7 @@ public class DashboardService {
         java.util.Comparator<MarketDataDto> comparator = switch (by.toUpperCase()) {
             case "MARKET_CAP" -> java.util.Comparator.comparing(MarketDataDto::mktcap, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
             case "VOLUME" -> java.util.Comparator.comparing(MarketDataDto::tradeVolume, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+            case "TRADE_VALUE" -> java.util.Comparator.comparing(MarketDataDto::tradeValue, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())); // 거래대금 정렬 추가
             case "CHANGE_RATE" -> "asc".equalsIgnoreCase(order)
                     ? java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
                     : java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
@@ -147,6 +149,7 @@ public class DashboardService {
                         d.currentPrice() != null ? d.currentPrice() : 0L,
                         d.fluc_rate() != null ? d.fluc_rate() : 0.0,
                         d.tradeVolume() != null ? d.tradeVolume() : 0L,
+                        d.tradeValue() != null ? d.tradeValue() : 0L, // 거래대금 추가
                         d.mktcap() != null ? d.mktcap() : 0L
                 ))
                 .toList();

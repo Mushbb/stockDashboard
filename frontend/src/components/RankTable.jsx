@@ -1,16 +1,76 @@
-// /frontend/src/components/RankTable.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import _ from 'lodash';
 
-function RankTable({ title, by, market = 'ALL', order = 'DESC', limit = 10, mode = 'default', width, height }) {
+const formatNumber = (num) => num?.toLocaleString() || '-';
+const formatRate = (rate) => (rate > 0 ? `+${rate.toFixed(2)}%` : `${rate?.toFixed(2) || '-'}%`);
+const getRateColor = (rate) => (rate > 0 ? '#d14242' : rate < 0 ? '#4287d1' : '#333');
+
+const ALL_COLUMNS = {
+    currentPrice: { header: '현재가', align: 'right', format: formatNumber },
+    changeRate: { header: '등락률', align: 'right', format: formatRate, color: getRateColor },
+    volume: { header: '거래량', align: 'right', format: formatNumber },
+    tradeValue: { header: '거래대금(억)', align: 'right', format: (val) => (val / 100000000).toFixed(0) },
+};
+
+const SettingsModal = ({ settings, onColumnToggle, onWidthChange, onClose }) => {
+    const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
+    const visibleColumns = settings.visibleColumns || Object.keys(ALL_COLUMNS);
+    const columnWidths = settings.columnWidths || defaultColumnWidths;
+
+    const handleWidthInput = (e, key) => {
+        if (e.key === 'Enter') {
+            onWidthChange(key, parseInt(e.target.value, 10) || 0);
+            e.target.blur();
+        }
+    };
+
+    return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', color: '#333' }} onClick={e => e.stopPropagation()}>
+                <h4>표시할 컬럼</h4>
+                <div>
+                    {Object.keys(ALL_COLUMNS).map(key => (
+                        <label key={key} style={{ marginRight: '15px', fontSize: '0.9em' }}>
+                            <input type="checkbox" checked={visibleColumns.includes(key)} onChange={() => onColumnToggle(key)} />
+                            {ALL_COLUMNS[key].header}
+                        </label>
+                    ))}
+                </div>
+                <h4 style={{ marginTop: '20px' }}>컬럼 너비 (px)</h4>
+                <div>
+                    {visibleColumns.map(key => (
+                        <label key={key} style={{ display: 'inline-block', marginRight: '15px', fontSize: '0.9em' }}>
+                            {ALL_COLUMNS[key].header}:
+                            <input
+                                type="number"
+                                defaultValue={columnWidths[key] || defaultColumnWidths[key]}
+                                onBlur={(e) => onWidthChange(key, parseInt(e.target.value, 10) || 0)}
+                                onKeyDown={(e) => handleWidthInput(e, key)}
+                                style={{ width: '60px', marginLeft: '5px' }}
+                            />
+                        </label>
+                    ))}
+                </div>
+                <button onClick={onClose} style={{ marginTop: '20px', float: 'right' }}>닫기</button>
+            </div>
+        </div>
+    );
+};
+
+function RankTable({ widgetId, settings, width, height }) {
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [currentSettings, setCurrentSettings] = useState(settings);
+    const [showSettings, setShowSettings] = useState(false);
+
+    const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
 
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
-            setError(null);
             try {
+                const { by, market = 'ALL', order = 'DESC', limit = 10, mode = 'default' } = currentSettings;
                 let url;
                 if (mode === 'top-and-bottom') {
                     url = `/api/market/rank/top-and-bottom?market=${market}&limit=${limit}`;
@@ -18,67 +78,123 @@ function RankTable({ title, by, market = 'ALL', order = 'DESC', limit = 10, mode
                     url = `/api/market/rank?by=${by}&market=${market}&order=${order}&limit=${limit}`;
                 }
                 const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const result = await response.json();
                 setData(result);
             } catch (e) {
+                console.error("Fetch data error:", e);
                 setError(e.message);
-                console.error(`Failed to fetch ${title} data:`, e);
             } finally {
                 setIsLoading(false);
             }
         };
-
         fetchData();
-        const intervalId = setInterval(fetchData, 300000); // 5분마다 갱신
-        return () => clearInterval(intervalId);
-    }, [title, by, market, order, limit, mode]);
+    }, [currentSettings]);
 
-    const formatPrice = (price) => {
-        if (price === null || typeof price === 'undefined') return '-';
-        return price.toLocaleString();
+    const debouncedSave = useCallback(
+        _.debounce((newSettings) => {
+            fetch(`/api/widgets/${widgetId}/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings),
+            }).catch(error => console.error(`Failed to save settings for widget ${widgetId}:`, error));
+        }, 1000),
+        [widgetId]
+    );
+
+    const handleSettingsChange = useCallback((newSettings) => {
+        setCurrentSettings(newSettings);
+        debouncedSave(newSettings);
+    }, [debouncedSave]);
+
+    const handleModeChange = useCallback((event) => {
+        const newMode = event.target.value;
+        let newSettings;
+        switch (newMode) {
+            case 'rate_desc': newSettings = { ...currentSettings, by: 'CHANGE_RATE', order: 'DESC', mode: 'default' }; break;
+            case 'rate_asc': newSettings = { ...currentSettings, by: 'CHANGE_RATE', order: 'ASC', mode: 'default' }; break;
+            case 'volume_desc': newSettings = { ...currentSettings, by: 'VOLUME', order: 'DESC', mode: 'default' }; break;
+            case 'trade_value_desc': newSettings = { ...currentSettings, by: 'TRADE_VALUE', order: 'DESC', mode: 'default' }; break;
+            case 'top_and_bottom': newSettings = { ...currentSettings, by: 'CHANGE_RATE', mode: 'top-and-bottom' }; break;
+            default: newSettings = currentSettings;
+        }
+        handleSettingsChange(newSettings);
+    }, [currentSettings, handleSettingsChange]);
+
+    const handleColumnToggle = useCallback((columnKey) => {
+        const currentColumns = currentSettings.visibleColumns || Object.keys(ALL_COLUMNS);
+        const newColumns = currentColumns.includes(columnKey)
+            ? currentColumns.filter(c => c !== columnKey)
+            : [...currentColumns, columnKey];
+        handleSettingsChange({ ...currentSettings, visibleColumns: newColumns });
+    }, [currentSettings, handleSettingsChange]);
+
+    const handleWidthChange = useCallback((columnKey, newWidth) => {
+        const newColumnWidths = { ...(currentSettings.columnWidths || defaultColumnWidths), [columnKey]: newWidth };
+        handleSettingsChange({ ...currentSettings, columnWidths: newColumnWidths });
+    }, [currentSettings, handleSettingsChange, defaultColumnWidths]);
+
+    const getCurrentMode = () => {
+        if (currentSettings.mode === 'top-and-bottom') return 'top_and_bottom';
+        if (currentSettings.by === 'VOLUME') return 'volume_desc';
+        if (currentSettings.by === 'TRADE_VALUE') return 'trade_value_desc';
+        if (currentSettings.order === 'ASC') return 'rate_asc';
+        return 'rate_desc';
     };
 
-    const formatRate = (rate) => {
-        if (rate === null || typeof rate === 'undefined') return '-';
-        const fixedRate = rate.toFixed(2);
-        return rate > 0 ? `+${fixedRate}%` : `${fixedRate}%`;
-    };
-
-    const getRateColor = (rate) => {
-        if (rate > 0) return '#d14242'; // 상승 (빨강)
-        if (rate < 0) return '#4287d1'; // 하락 (파랑)
-        return '#333'; // 보합
-    };
+    const visibleColumns = currentSettings.visibleColumns || ['currentPrice', 'changeRate'];
+    const columnWidths = currentSettings.columnWidths || defaultColumnWidths;
 
     return (
-        <div style={{ width: `${width}px`, height: `${height}px`, overflowY: 'auto' }}>
-            {isLoading && <p>로딩 중...</p>}
-            {error && <p style={{ color: 'red' }}>오류: {error}</p>}
-            {!isLoading && !error && (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em' }}>
-                    <thead>
-                        <tr style={{ borderBottom: '1px solid #eee' }}>
-                            <th style={{ padding: '8px', textAlign: 'left', fontWeight: 'normal', color: '#666' }}>종목명</th>
-                            <th style={{ padding: '8px', textAlign: 'right', fontWeight: 'normal', color: '#666' }}>현재가</th>
-                            <th style={{ padding: '8px', textAlign: 'right', fontWeight: 'normal', color: '#666' }}>등락률</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.map((item, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #f5f5f5' }}>
-                                <td style={{ padding: '8px', textAlign: 'left' }}>{item.name}</td>
-                                <td style={{ padding: '8px', textAlign: 'right' }}>{formatPrice(item.currentPrice)}</td>
-                                <td style={{ padding: '8px', textAlign: 'right', color: getRateColor(item.changeRate), fontWeight: 'bold' }}>
-                                    {formatRate(item.changeRate)}
-                                </td>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ padding: '5px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                <select value={getCurrentMode()} onChange={handleModeChange} style={{ fontSize: '0.8em', marginRight: '5px' }}>
+                    <option value="rate_desc">📈 상승률</option>
+                    <option value="rate_asc">📉 하락률</option>
+                    <option value="volume_desc">📊 거래량</option>
+                    <option value="trade_value_desc">💰 거래대금</option>
+                    <option value="top_and_bottom">🎢 Top & Bottom</option>
+                </select>
+                <button onClick={() => setShowSettings(true)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2em' }}>⚙️</button>
+            </div>
+            
+            {showSettings && 
+                <SettingsModal 
+                    settings={currentSettings} 
+                    onColumnToggle={handleColumnToggle} 
+                    onWidthChange={handleWidthChange} 
+                    onClose={() => setShowSettings(false)} 
+                />
+            }
+
+            <div style={{ width: '100%', flexGrow: 1, overflow: 'hidden' }}>
+                {isLoading ? <p style={{textAlign: 'center'}}>Loading...</p> : error ? <p style={{ color: 'red', textAlign: 'center' }}>Error: {error}</p> : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em', tableLayout: 'fixed' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid #eee' }}>
+                                <th title="종목명" style={{ padding: '8px', textAlign: 'left', fontWeight: 'normal', color: '#666', width: `${columnWidths.name}px`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>종목명</th>
+                                {visibleColumns.map(key => (
+                                    <th key={key} title={ALL_COLUMNS[key].header} style={{ padding: '8px', textAlign: ALL_COLUMNS[key].align, fontWeight: 'normal', color: '#666', width: `${columnWidths[key]}px`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {ALL_COLUMNS[key].header}
+                                    </th>
+                                ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+                        </thead>
+                        <tbody>
+                            {data.map((item, index) => (
+                                <tr key={index} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                                    <td title={item.name} style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</td>
+                                    {visibleColumns.map(key => (
+                                        <td key={key} title={ALL_COLUMNS[key].format(item[key])} style={{ padding: '8px', textAlign: ALL_COLUMNS[key].align, color: ALL_COLUMNS[key].color?.(item[key]), fontWeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {ALL_COLUMNS[key].format(item[key])}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
         </div>
     );
 }

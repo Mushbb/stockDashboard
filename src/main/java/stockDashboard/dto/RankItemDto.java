@@ -7,5 +7,6 @@ public record RankItemDto(
     long currentPrice, // 현재가
     double changeRate, // 등락률
     long volume,       // 거래량
+    long tradeValue,   // 거래대금
     long marketCap     // 시가총액
 ) {}

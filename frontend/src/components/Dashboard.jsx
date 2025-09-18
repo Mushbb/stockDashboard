@@ -18,7 +18,7 @@ const Widget = ({ widgetId, type, props }) => {
                     case 'TreemapChart':
                         return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height - 45} />;
                     case 'RankTable':
-                        return <RankTable {...props} width={width} height={height - 40} />;
+                        return <RankTable widgetId={widgetId} settings={props} width={width} height={Math.max(0, height - 40)} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }

@@ -82,23 +82,22 @@ public class KrxRepository {
 		List<MarketDataDto> marketDataList = new ArrayList<>();
 
 		for (Map<String, Object> row : results) {
-			marketDataList.add(new MarketDataDto(
-					(String) row.get("ISU_SRT_CD"),
-					(String) row.get("node_name"),
-					getLongValue(row, "MKTCAP"),
-					getDoubleValue(row, "FLUC_RT"),
-					getLongValue(row, "TDD_CLSPRC"),
-                    getLongValue(row, "TDD_OPNPRC"),
-                    getLongValue(row, "TDD_HGPRC"),
-                    getLongValue(row, "TDD_LWPRC"),
-                    getLongValue(row, "ACC_TRDVOL"),
-                    getLongValue(row, "ACC_TRDVAL"),
-					(String) row.get("sector_name"),
-					(String) row.get("market_type"),
-					getLocalDateValue(row, "metric_date"),
-					getLocalDateTimeValue(row, "collected_at")
-            ));
-		}
+			            marketDataList.add(new MarketDataDto(
+			                    (String) row.get("ISU_SRT_CD"),
+			                    (String) row.get("node_name"),
+			                    getLongValue(row, "MKTCAP"),
+			                    getDoubleValue(row, "FLUC_RT"),
+			                    getLongValue(row, "TDD_CLSPRC"),
+			                    getLongValue(row, "TDD_OPNPRC"),
+			                    getLongValue(row, "TDD_HGPRC"),
+			                    getLongValue(row, "TDD_LWPRC"),
+			                    getLongValue(row, "ACC_TRDVOL"),
+			                    getLongValue(row, "ACC_TRDVAL"),
+			                    (String) row.get("sector_name"),
+			                    (String) row.get("market_type"),
+			                    getLocalDateValue(row, "metric_date"),
+			                    getLocalDateTimeValue(row, "collected_at")
+			            ));		}
 
 		return marketDataList;
 	}
