@@ -65,19 +65,11 @@ function RankTable({ widgetId, settings, width, height }) {
     const [showSettings, setShowSettings] = useState(false);
 
     const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
-    const rowHeight = 35; // 한 행의 대략적인 높이 (px)
-    const headerAndSettingsHeight = 70; // 테이블 헤더 + 설정 UI 영역의 대략적인 높이
 
-    // height prop이 변경될 때마다 limit을 다시 계산하는 로직
+    // settings prop이 변경될 때마다(limit 포함) currentSettings를 업데이트
     useEffect(() => {
-        if (height > headerAndSettingsHeight) {
-            const newLimit = Math.floor((height - headerAndSettingsHeight) / rowHeight);
-            if (newLimit > 0 && newLimit !== currentSettings.limit) {
-                // limit이 변경되면 settings를 업데이트 (API 호출은 currentSettings useEffect에서 처리)
-                setCurrentSettings(prev => ({ ...prev, limit: newLimit }));
-            }
-        }
-    }, [height, currentSettings.limit]);
+        setCurrentSettings(settings);
+    }, [settings]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -102,14 +94,16 @@ function RankTable({ widgetId, settings, width, height }) {
             }
         };
         fetchData();
-    }, [currentSettings]); // currentSettings가 변경될 때마다 데이터 다시 로드
+    }, [currentSettings]);
 
     const debouncedSave = useCallback(
         _.debounce((newSettings) => {
+            // limit은 동적으로 계산되므로 DB에 저장하지 않음
+            const { limit, ...settingsToSave } = newSettings;
             fetch(`/api/widgets/${widgetId}/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newSettings),
+                body: JSON.stringify(settingsToSave),
             }).catch(error => console.error(`Failed to save settings for widget ${widgetId}:`, error));
         }, 1000),
         [widgetId]

@@ -35,6 +35,14 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Widget = ({ widgetId, type, props }) => {
     const [ref, { width, height }] = useResizeObserver();
+
+    // RankTable을 위한 limit 계산
+    const rankTableLimit = (() => {
+        if (type !== 'RankTable' || height <= 70) return 10; // 기본값
+        const rowHeight = 35;
+        return Math.floor((height - 70) / rowHeight);
+    })();
+
     return (
         <div ref={ref} style={{ width: '100%', height: '100%' }}>
             {(() => {
@@ -43,7 +51,8 @@ const Widget = ({ widgetId, type, props }) => {
                     case 'TreemapChart':
                         return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height - 45} />;
                     case 'RankTable':
-                        return <RankTable widgetId={widgetId} settings={props} width={width} height={height} />;
+                        // 계산된 limit을 props에 추가하여 전달
+                        return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }
