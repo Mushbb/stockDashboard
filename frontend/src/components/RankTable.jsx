@@ -65,6 +65,19 @@ function RankTable({ widgetId, settings, width, height }) {
     const [showSettings, setShowSettings] = useState(false);
 
     const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
+    const rowHeight = 35; // 한 행의 대략적인 높이 (px)
+    const headerAndSettingsHeight = 70; // 테이블 헤더 + 설정 UI 영역의 대략적인 높이
+
+    // height prop이 변경될 때마다 limit을 다시 계산하는 로직
+    useEffect(() => {
+        if (height > headerAndSettingsHeight) {
+            const newLimit = Math.floor((height - headerAndSettingsHeight) / rowHeight);
+            if (newLimit > 0 && newLimit !== currentSettings.limit) {
+                // limit이 변경되면 settings를 업데이트 (API 호출은 currentSettings useEffect에서 처리)
+                setCurrentSettings(prev => ({ ...prev, limit: newLimit }));
+            }
+        }
+    }, [height, currentSettings.limit]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -89,7 +102,7 @@ function RankTable({ widgetId, settings, width, height }) {
             }
         };
         fetchData();
-    }, [currentSettings]);
+    }, [currentSettings]); // currentSettings가 변경될 때마다 데이터 다시 로드
 
     const debouncedSave = useCallback(
         _.debounce((newSettings) => {
