@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from '/src/App.jsx';
+import App from './App.jsx';
 
 // public/index.html 파일에 있는 'root' div를 가져옵니다.
 const rootElement = document.getElementById('root');

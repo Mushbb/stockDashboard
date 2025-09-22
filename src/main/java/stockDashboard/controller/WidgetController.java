@@ -1,6 +1,8 @@
 package stockDashboard.controller;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -12,19 +14,26 @@ import stockDashboard.repository.WidgetRepository.WidgetDto;
 import stockDashboard.service.WidgetService;
 
 @RestController
-@RequestMapping("/api/widgets") // 기본 경로 설정
-@RequiredArgsConstructor
+@RequestMapping("/api/widgets")
 public class WidgetController {
 
     private final WidgetService widgetService;
+    private final JdbcTemplate jdbcTemplate; // authJdbcTemplate 주입
 
-    // 임시 사용자 ID 조회용 (변경 없음)
-    private long getUserIdFromUserDetails(UserDetails userDetails) {
-        if ("admin".equals(userDetails.getUsername())) return 1L;
-        throw new UnsupportedOperationException("Cannot get user ID for: " + userDetails.getUsername());
+    public WidgetController(WidgetService widgetService, @Qualifier("authJdbcTemplate") JdbcTemplate jdbcTemplate) {
+        this.widgetService = widgetService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
-    // 위젯 생성 요청을 위한 DTO
+    private long getUserIdFromUserDetails(UserDetails userDetails) {
+        String username = userDetails.getUsername();
+        Long userId = jdbcTemplate.queryForObject("SELECT user_id FROM users WHERE username = ?", Long.class, username);
+        if (userId == null) {
+            throw new IllegalStateException("Cannot find user ID for: " + username);
+        }
+        return userId;
+    }
+
     private record WidgetCreationRequest(String widgetName, String widgetType, String layoutInfo, String widgetSettings) {}
 
     @PostMapping

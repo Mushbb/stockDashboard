@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import _ from 'lodash';
+import { useAuth } from '../contexts/AuthContext';
+import { LoginModal } from './LoginModal';
 import TreemapChart from './TreemapChart';
 import RankTable from './RankTable';
 import ChartContainer from './ChartContainer';
@@ -35,23 +37,19 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Widget = ({ widgetId, type, props }) => {
     const [ref, { width, height }] = useResizeObserver();
-
-    // RankTable을 위한 limit 계산
     const rankTableLimit = (() => {
-        if (type !== 'RankTable' || height <= 70) return 10; // 기본값
+        if (type !== 'RankTable' || height <= 70) return 10;
         const rowHeight = 35;
         return Math.floor((height - 70) / rowHeight);
     })();
-
     return (
         <div ref={ref} style={{ width: '100%', height: '100%' }}>
             {(() => {
                 if (width === 0 || height === 0) return null;
                 switch (type) {
                     case 'TreemapChart':
-                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height - 45} />;
+                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-45} />;
                     case 'RankTable':
-                        // 계산된 limit을 props에 추가하여 전달
                         return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} />;
                     default:
                         return <div>Unknown widget type</div>;
@@ -62,37 +60,49 @@ const Widget = ({ widgetId, type, props }) => {
 };
 
 function Dashboard() {
+    const { user, logout } = useAuth();
     const [widgets, setWidgets] = useState({});
     const [layouts, setLayouts] = useState({ lg: [], md: [], sm: [] });
-    const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
     const [loading, setLoading] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
     const [isAddModalOpen, setAddModalOpen] = useState(false);
+    const [isLoginModalOpen, setLoginModalOpen] = useState(false);
+    const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
 
     useEffect(() => {
-        fetch('/api/widgets')
-            .then(res => res.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    const newWidgets = {};
-                    const newLayouts = { lg: [], md: [], sm: [] };
-                    data.forEach(widget => {
-                        const widgetId = widget.widgetId.toString();
-                        newWidgets[widgetId] = { title: widget.widgetName, type: widget.widgetType, props: JSON.parse(widget.widgetSettings) };
-                        const layoutInfo = JSON.parse(widget.layoutInfo);
-                        Object.keys(layoutInfo).forEach(bp => {
-                            if (newLayouts[bp] && layoutInfo[bp]) {
-                                newLayouts[bp].push({ ...layoutInfo[bp], i: widgetId });
-                            }
+        if (user) {
+            setLoading(true);
+            fetch('/api/widgets')
+                .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to fetch widgets')))
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const newWidgets = {};
+                        const newLayouts = { lg: [], md: [], sm: [] };
+                        data.forEach(widget => {
+                            const widgetId = widget.widgetId.toString();
+                            newWidgets[widgetId] = { title: widget.widgetName, type: widget.widgetType, props: JSON.parse(widget.widgetSettings) };
+                            const layoutInfo = JSON.parse(widget.layoutInfo);
+                            Object.keys(layoutInfo).forEach(bp => {
+                                if (newLayouts[bp] && layoutInfo[bp]) {
+                                    newLayouts[bp].push({ ...layoutInfo[bp], i: widgetId });
+                                }
+                            });
                         });
-                    });
-                    setWidgets(newWidgets);
-                    setLayouts(newLayouts);
-                }
-            })
-            .catch(error => console.error("Failed to load initial widgets:", error))
-            .finally(() => setLoading(false));
-    }, []);
+                        setWidgets(newWidgets);
+                        setLayouts(newLayouts);
+                    }
+                })
+                .catch(error => {
+                    console.error(error);
+                    if (error.message.includes('401')) setLoginModalOpen(true);
+                })
+                .finally(() => setLoading(false));
+        } else {
+            setWidgets({});
+            setLayouts({ lg: [], md: [], sm: [] });
+            setLoading(false);
+        }
+    }, [user]);
 
     const changedLayoutsRef = useRef({});
     const debouncedSaveLayout = useCallback(_.debounce(() => {
@@ -100,11 +110,8 @@ function Dashboard() {
         if (Object.keys(layoutsToSave).length === 0) return;
         Object.keys(layoutsToSave).forEach(widgetId => {
             const layoutInfo = layoutsToSave[widgetId];
-            fetch(`/api/widgets/${widgetId}/layout`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(layoutInfo),
-            }).catch(error => console.error(`Failed to save layout for widget ${widgetId}:`, error));
+            fetch(`/api/widgets/${widgetId}/layout`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(layoutInfo) })
+                .catch(error => console.error(`Failed to save layout for widget ${widgetId}:`, error));
         });
         changedLayoutsRef.current = {};
     }, 2000), []);
@@ -129,14 +136,9 @@ function Dashboard() {
 
     const handleAddWidget = (widgetTemplate) => {
         setAddModalOpen(false);
-        const newLayoutItem = { i: 'new', x: 0, y: 0, w: 2, h: 2 }; // h 값을 2로 수정
+        const newLayoutItem = { i: 'new', x: 0, y: 0, w: 2, h: 2 };
         const defaultLayoutInfo = { lg: newLayoutItem, md: newLayoutItem, sm: newLayoutItem };
-        const newWidgetData = {
-            widgetName: widgetTemplate.name,
-            widgetType: widgetTemplate.type,
-            layoutInfo: JSON.stringify(defaultLayoutInfo),
-            widgetSettings: JSON.stringify(widgetTemplate.settings),
-        };
+        const newWidgetData = { widgetName: widgetTemplate.name, widgetType: widgetTemplate.type, layoutInfo: JSON.stringify(defaultLayoutInfo), widgetSettings: JSON.stringify(widgetTemplate.settings) };
         fetch('/api/widgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newWidgetData) })
             .then(() => { window.location.reload(); })
             .catch(err => console.error('Failed to add widget:', err));
@@ -174,15 +176,26 @@ function Dashboard() {
         }
     };
 
-    if (loading) return <div>Loading Dashboard...</div>;
+    if (loading && !user) return <div>Loading...</div>;
+
+    if (!user) {
+        return (
+            <div style={{ textAlign: 'center', marginTop: '50px' }}>
+                <h1>로그인이 필요합니다.</h1>
+                <button onClick={() => setLoginModalOpen(true)}>로그인 / 회원가입</button>
+                {isLoginModalOpen && <LoginModal onClose={() => setLoginModalOpen(false)} />}
+            </div>
+        );
+    }
 
     return (
         <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ margin: 0 }}>주요 증시 현황 대시보드</h1>
+                <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
                 <div>
                     <button onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? '✅ 완료' : '✏️ 편집'}</button>
                     {isEditMode && <button onClick={() => setAddModalOpen(true)} style={{ marginLeft: '10px' }}>+ 위젯 추가</button>}
+                    <button onClick={logout} style={{ marginLeft: '10px' }}>로그아웃</button>
                 </div>
             </div>
 
