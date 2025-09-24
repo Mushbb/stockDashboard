@@ -1,6 +1,7 @@
 package stockDashboard.repository;
 
 import stockDashboard.dto.MarketDataDto;
+import stockDashboard.dto.PriceHistoryDto;
 
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -21,6 +22,34 @@ public class KrxRepository {
     public KrxRepository(@Qualifier("appJdbcTemplate") JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
+
+	/**
+	 * 특정 종목의 지정된 날짜 이후 시세 이력을 조회합니다.
+	 * @param symbol 종목코드
+	 * @param startDate 조회 시작 날짜
+	 * @return 시세 이력 DTO 리스트
+	 */
+	public List<PriceHistoryDto> getPriceHistoryBySymbol(String symbol, LocalDate startDate) {
+		String sql = """
+				WITH RankedMetrics AS (
+				    SELECT
+				        *,
+				        ROW_NUMBER() OVER(PARTITION BY metric_date ORDER BY collected_at DESC) as rn
+				    FROM daily_metrics
+				    WHERE ISU_SRT_CD = ? AND metric_date >= ? AND TDD_CLSPRC IS NOT NULL
+				)
+				SELECT 
+				    metric_date, TDD_OPNPRC, TDD_HGPRC, TDD_LWPRC, TDD_CLSPRC, ACC_TRDVOL
+				FROM RankedMetrics
+				WHERE rn = 1
+				ORDER BY metric_date ASC
+				""";
+		
+		Object[] params = { symbol, startDate };
+		List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, params);
+
+		return mapResultsToPriceHistoryDto(results);
+	}
 	
 	/**
 	 * 가장 최근 날짜의 장중 시장 데이터를 시가총액 순으로 조회합니다.
@@ -76,6 +105,27 @@ public class KrxRepository {
 		List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, params);
 
 		return mapResultsToMarketDataDto(results);
+	}
+
+	private List<PriceHistoryDto> mapResultsToPriceHistoryDto(List<Map<String, Object>> results) {
+		List<PriceHistoryDto> priceHistoryList = new ArrayList<>();
+		for (Map<String, Object> row : results) {
+			Long open = getLongValue(row, "TDD_OPNPRC");
+			Long high = getLongValue(row, "TDD_HGPRC");
+			Long low = getLongValue(row, "TDD_LWPRC");
+			Long close = getLongValue(row, "TDD_CLSPRC");
+			Long volume = getLongValue(row, "ACC_TRDVOL");
+
+			priceHistoryList.add(new PriceHistoryDto(
+				getLocalDateValue(row, "metric_date").toString(),
+				open != null ? open : 0L,
+				high != null ? high : 0L,
+				low != null ? low : 0L,
+				close != null ? close : 0L,
+				volume != null ? volume : 0L
+			));
+		}
+		return priceHistoryList;
 	}
 
 	private List<MarketDataDto> mapResultsToMarketDataDto(List<Map<String, Object>> results) {
@@ -134,4 +184,18 @@ public class KrxRepository {
         }
         return null;
     }
+
+	/**
+	 * 종목 코드로 현재 종목명을 조회합니다.
+	 * @param symbol 종목코드
+	 * @return 종목명
+	 */
+	public String getStockNameBySymbol(String symbol) {
+		String sql = "SELECT value FROM stock_history WHERE stock_id = ? AND history_type = 'NAME' AND end_date IS NULL";
+		try {
+			return jdbcTemplate.queryForObject(sql, String.class, symbol);
+		} catch (Exception e) {
+			return null; // 종목명이 없는 경우
+		}
+	}
 }

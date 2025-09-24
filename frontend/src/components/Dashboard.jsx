@@ -7,9 +7,13 @@ import TreemapChart from './TreemapChart';
 import RankTable from './RankTable';
 import ChartContainer from './ChartContainer';
 import { useResizeObserver } from './useResizeObserver';
+import SymbolChartWidget from './SymbolChartWidget';
+import KrxChartWidget from './KrxChartWidget';
 
 const AddWidgetModal = ({ onAdd, onClose }) => {
     const availableWidgets = [
+        { name: '국내 주식 차트', type: 'KrxChartWidget', settings: { symbol: '005930' } },
+        { name: '글로벌 차트 (해외/코인)', type: 'SymbolChartWidget', settings: { symbol: 'AAPL' } },
         { name: '통합 시장 트리맵', type: 'TreemapChart', settings: { marketType: 'ALL' } },
         { name: '상승률 순위', type: 'RankTable', settings: { by: 'CHANGE_RATE', order: 'DESC', visibleColumns: ['currentPrice', 'changeRate'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
         { name: '하락률 순위', type: 'RankTable', settings: { by: 'CHANGE_RATE', order: 'ASC', visibleColumns: ['currentPrice', 'changeRate'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
@@ -35,7 +39,7 @@ const AddWidgetModal = ({ onAdd, onClose }) => {
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-const Widget = ({ widgetId, type, props }) => {
+const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCloseSettings }) => {
     const [ref, { width, height }] = useResizeObserver();
     const rankTableLimit = (() => {
         if (type !== 'RankTable' || height <= 70) return 10;
@@ -51,12 +55,23 @@ const Widget = ({ widgetId, type, props }) => {
                         return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-45} />;
                     case 'RankTable':
                         return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} />;
+                    case 'SymbolChartWidget':
+                        return <SymbolChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} editingWidgetId={editingWidgetId} onCloseSettings={onCloseSettings} />;
+                    case 'KrxChartWidget':
+                        return <KrxChartWidget settings={props} width={width} height={height} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }
             })()}
         </div>
     );
+};
+
+const WIDGET_SIZE_LIMITS = {
+    KrxChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
+    SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
+    TreemapChart: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
+    RankTable: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
 };
 
 function Dashboard() {
@@ -68,6 +83,16 @@ function Dashboard() {
     const [isAddModalOpen, setAddModalOpen] = useState(false);
     const [isLoginModalOpen, setLoginModalOpen] = useState(false);
     const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
+    const [editingWidgetId, setEditingWidgetId] = useState(null);
+
+    const handleSettings = useCallback((event) => {
+        const widgetId = event.currentTarget.dataset.id;
+        setEditingWidgetId(widgetId);
+    }, []);
+
+    const handleCloseSettings = useCallback(() => {
+        setEditingWidgetId(null);
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -82,9 +107,10 @@ function Dashboard() {
                             const widgetId = widget.widgetId.toString();
                             newWidgets[widgetId] = { title: widget.widgetName, type: widget.widgetType, props: JSON.parse(widget.widgetSettings) };
                             const layoutInfo = JSON.parse(widget.layoutInfo);
+                            const limits = WIDGET_SIZE_LIMITS[widget.widgetType] || {};
                             Object.keys(layoutInfo).forEach(bp => {
                                 if (newLayouts[bp] && layoutInfo[bp]) {
-                                    newLayouts[bp].push({ ...layoutInfo[bp], i: widgetId });
+                                    newLayouts[bp].push({ ...layoutInfo[bp], i: widgetId, ...limits });
                                 }
                             });
                         });
@@ -136,7 +162,8 @@ function Dashboard() {
 
     const handleAddWidget = (widgetTemplate) => {
         setAddModalOpen(false);
-        const newLayoutItem = { i: 'new', x: 0, y: 0, w: 2, h: 2 };
+        const limits = WIDGET_SIZE_LIMITS[widgetTemplate.type] || {};
+        const newLayoutItem = { i: 'new', x: 0, y: 0, w: 2, h: 2, ...limits };
         const defaultLayoutInfo = { lg: newLayoutItem, md: newLayoutItem, sm: newLayoutItem };
         const newWidgetData = { widgetName: widgetTemplate.name, widgetType: widgetTemplate.type, layoutInfo: JSON.stringify(defaultLayoutInfo), widgetSettings: JSON.stringify(widgetTemplate.settings) };
         fetch('/api/widgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newWidgetData) })
@@ -144,7 +171,8 @@ function Dashboard() {
             .catch(err => console.error('Failed to add widget:', err));
     };
 
-    const handleRenameWidget = (widgetId) => {
+    const handleRenameWidget = useCallback((event) => {
+        const widgetId = event.currentTarget.dataset.id;
         const newName = prompt("새로운 위젯 이름을 입력하세요:", widgets[widgetId].title);
         if (newName && newName !== widgets[widgetId].title) {
             const originalWidgets = widgets;
@@ -155,9 +183,10 @@ function Dashboard() {
                     setWidgets(originalWidgets);
                 });
         }
-    };
+    }, [widgets]);
 
-    const handleDeleteWidget = (widgetId) => {
+    const handleDeleteWidget = useCallback((event) => {
+        const widgetId = event.currentTarget.dataset.id;
         if (window.confirm(`'${widgets[widgetId].title}' 위젯을 삭제하시겠습니까?`)) {
             const originalWidgets = widgets;
             const originalLayouts = layouts;
@@ -174,7 +203,24 @@ function Dashboard() {
                     setLayouts(originalLayouts);
                 });
         }
-    };
+    }, [widgets, layouts]);
+
+    const handleWidgetSettingsChange = useCallback((widgetId, newSettings) => {
+        const originalWidgets = widgets;
+        setWidgets(prev => ({
+            ...prev,
+            [widgetId]: { ...prev[widgetId], props: newSettings }
+        }));
+
+        fetch(`/api/widgets/${widgetId}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings),
+        }).catch(err => {
+            console.error('Failed to save widget settings:', err);
+            setWidgets(originalWidgets); // 오류 발생 시 원래 상태로 복원
+        });
+    }, [widgets]);
 
     if (loading && !user) return <div>Loading...</div>;
 
@@ -217,12 +263,21 @@ function Dashboard() {
                 {Object.keys(widgets).map(key => (
                     <div key={key}>
                         <ChartContainer 
+                            widgetId={key}
                             title={widgets[key].title}
                             isEditMode={isEditMode}
-                            onRename={() => handleRenameWidget(key)}
-                            onDelete={() => handleDeleteWidget(key)}
+                            onRename={handleRenameWidget}
+                            onDelete={handleDeleteWidget}
+                            onSettings={widgets[key].type === 'SymbolChartWidget' ? handleSettings : null}
                         >
-                            <Widget widgetId={key} type={widgets[key].type} props={widgets[key].props} />
+                            <Widget 
+                                widgetId={key} 
+                                type={widgets[key].type} 
+                                props={widgets[key].props} 
+                                onSettingsChange={handleWidgetSettingsChange} // 안정적인 함수 전달
+                                editingWidgetId={editingWidgetId}
+                                onCloseSettings={handleCloseSettings} // 안정적인 함수 전달
+                            />
                         </ChartContainer>
                     </div>
                 ))}
