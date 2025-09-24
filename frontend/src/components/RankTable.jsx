@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import _ from 'lodash';
+import { useDashboard } from '../contexts/DashboardContext';
 
 const formatNumber = (num) => num?.toLocaleString() || '-';
 const formatRate = (rate) => (rate > 0 ? `+${rate.toFixed(2)}%` : `${rate?.toFixed(2) || '-'}%`);
@@ -12,52 +13,8 @@ const ALL_COLUMNS = {
     tradeValue: { header: '거래대금(억)', align: 'right', format: (val) => (val / 100000000).toFixed(0) },
 };
 
-const SettingsModal = ({ settings, onColumnToggle, onWidthChange, onClose }) => {
-    const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
-    const visibleColumns = settings.visibleColumns || Object.keys(ALL_COLUMNS);
-    const columnWidths = settings.columnWidths || defaultColumnWidths;
-
-    const handleWidthInput = (e, key) => {
-        if (e.key === 'Enter') {
-            onWidthChange(key, parseInt(e.target.value, 10) || 0);
-            e.target.blur();
-        }
-    };
-
-    return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-            <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', color: '#333' }} onClick={e => e.stopPropagation()}>
-                <h4>표시할 컬럼</h4>
-                <div>
-                    {Object.keys(ALL_COLUMNS).map(key => (
-                        <label key={key} style={{ marginRight: '15px', fontSize: '0.9em' }}>
-                            <input type="checkbox" checked={visibleColumns.includes(key)} onChange={() => onColumnToggle(key)} />
-                            {ALL_COLUMNS[key].header}
-                        </label>
-                    ))}
-                </div>
-                <h4 style={{ marginTop: '20px' }}>컬럼 너비 (px)</h4>
-                <div>
-                    {visibleColumns.map(key => (
-                        <label key={key} style={{ display: 'inline-block', marginRight: '15px', fontSize: '0.9em' }}>
-                            {ALL_COLUMNS[key].header}:
-                            <input
-                                type="number"
-                                defaultValue={columnWidths[key] || defaultColumnWidths[key]}
-                                onBlur={(e) => onWidthChange(key, parseInt(e.target.value, 10) || 0)}
-                                onKeyDown={(e) => handleWidthInput(e, key)}
-                                style={{ width: '60px', marginLeft: '5px' }}
-                            />
-                        </label>
-                    ))}
-                </div>
-                <button onClick={onClose} style={{ marginTop: '20px', float: 'right' }}>닫기</button>
-            </div>
-        </div>
-    );
-};
-
 function RankTable({ widgetId, settings, width, height }) {
+    const { setSelectedAsset } = useDashboard();
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -189,7 +146,11 @@ function RankTable({ widgetId, settings, width, height }) {
                         </thead>
                         <tbody>
                             {data.map((item, index) => (
-                                <tr key={index} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                                <tr 
+                                    key={index} 
+                                    style={{ borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}
+                                    onClick={() => setSelectedAsset({ symbol: item.symbol, type: 'KRX' })}
+                                >
                                     <td title={item.name} style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</td>
                                     {visibleColumns.map(key => (
                                         <td key={key} title={ALL_COLUMNS[key].format(item[key])} style={{ padding: '8px', textAlign: ALL_COLUMNS[key].align, color: ALL_COLUMNS[key].color?.(item[key]), fontWeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

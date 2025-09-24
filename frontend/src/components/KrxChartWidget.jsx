@@ -1,12 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, HistogramSeries, createTextWatermark } from 'lightweight-charts';
 
+import { useDashboard } from '../contexts/DashboardContext';
+
 const KrxChartWidget = ({ settings, width, height }) => {
     const chartContainerRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const { symbol = '005930' } = settings;
+    const { selectedAsset } = useDashboard();
+    const [symbol, setSymbol] = useState(settings.symbol || '005930');
+
+    // 대시보드 컨텍스트에서 KRX 타입의 심볼이 선택되면, 이 위젯의 심볼을 업데이트
+    useEffect(() => {
+        if (selectedAsset && selectedAsset.type === 'KRX') {
+            setSymbol(selectedAsset.symbol);
+        }
+    }, [selectedAsset]);
 
     useEffect(() => {
         if (!chartContainerRef.current || width === 0 || height === 0) return;

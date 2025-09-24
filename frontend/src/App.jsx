@@ -1,6 +1,7 @@
 import React from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataProvider';
+import { DashboardProvider } from './contexts/DashboardContext';
 import Dashboard from './components/Dashboard';
 
 // Grid Layout CSS
@@ -10,9 +11,11 @@ import 'react-resizable/css/styles.css';
 function App() {
 	return (
         <AuthProvider>
-		    <DataProvider>
-			    <Dashboard />
-		    </DataProvider>
+            <DashboardProvider>
+		        <DataProvider>
+			        <Dashboard />
+		        </DataProvider>
+            </DashboardProvider>
         </AuthProvider>
 	);
 }

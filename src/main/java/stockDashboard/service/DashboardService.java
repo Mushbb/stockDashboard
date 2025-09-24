@@ -145,6 +145,7 @@ public class DashboardService {
                 .limit(limit)
                 .map(d -> new RankItemDto(
                         rank.getAndIncrement(),
+                        d.isuSrtCd(), // 종목코드 추가
                         d.nodeName(),
                         d.currentPrice() != null ? d.currentPrice() : 0L,
                         d.fluc_rate() != null ? d.fluc_rate() : 0.0,
