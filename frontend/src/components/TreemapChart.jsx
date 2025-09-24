@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 
+import { useDashboard } from '../contexts/DashboardContext';
+
 // Helper functions (unchanged)
 function pruneByPixel(root, minPixel) {
 	const keep = new Set();
@@ -39,6 +41,7 @@ const findNodeByPath = (root, path) => {
 };
 
 function TreemapChart({ widgetId, settings, width, height }) {
+    const { setSelectedAsset } = useDashboard();
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -141,12 +144,15 @@ function TreemapChart({ widgetId, settings, width, height }) {
 			.attr('transform', d => `translate(${x(d.x0)}, ${y(d.y0)})`)
 			.style('cursor', d => (d.children ? 'pointer' : 'default'))
 			.on('click', (event, d) => {
-				if (d.children) {
+				if (d.children) { // 섹터 클릭 시 줌인
 					const nextView = (view.children || []).find(child => child.data.name === d.data.name);
 					if (nextView) {
 						currentPathRef.current = getNodePath(nextView);
 						setView(nextView);
 					}
+				} else { // 종목(leaf) 클릭 시 동기화
+					event.stopPropagation(); // 줌인 방지
+					setSelectedAsset({ symbol: d.data.symbol, type: 'KRX' });
 				}
 			});
 		cell.append('rect')

@@ -2,6 +2,7 @@ package stockDashboard.repository;
 
 import stockDashboard.dto.MarketDataDto;
 import stockDashboard.dto.PriceHistoryDto;
+import stockDashboard.dto.StockSearchDto;
 
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -197,5 +198,29 @@ public class KrxRepository {
 		} catch (Exception e) {
 			return null; // 종목명이 없는 경우
 		}
+	}
+
+	/**
+	 * 이름으로 주식 및 ETF를 검색합니다.
+	 * @param query 검색어
+	 * @return 검색된 종목 정보 DTO 리스트
+	 */
+    public List<StockSearchDto> searchStocksByName(String query) {
+        String sql = """
+                SELECT DISTINCT TOP 10
+                    h.stock_id AS symbol,
+                    h.value AS name
+                FROM stock_history h
+                INNER JOIN daily_metrics lm ON h.stock_id = lm.ISU_SRT_CD
+                WHERE h.history_type = 'NAME' 
+                	AND h.end_date IS NULL 
+                	AND lm.metric_date = ( SELECT MAX(metric_date) FROM daily_metrics ) 
+                	AND h.value LIKE ?
+                """;
+        
+        Object[] params = { "%" + query + "%" };		return jdbcTemplate.query(sql, (rs, rowNum) -> new StockSearchDto(
+			rs.getString("symbol"),
+			rs.getString("name")
+		), params);
 	}
 }

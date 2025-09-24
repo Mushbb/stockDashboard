@@ -193,6 +193,7 @@ public class DashboardService {
                     // 4. 섹터 내의 각 종목을 TreemapNodeDto로 변환
                     List<TreemapNodeDto> stockChildren = items.stream()
                             .map(item -> new TreemapNodeDto(
+                                    item.isuSrtCd(), // 종목코드 추가
                                     item.nodeName() != null ? item.nodeName() : "이름없음",
                                     item.mktcap() != null ? item.mktcap() : 0L,
                                     item.fluc_rate() != null ? item.fluc_rate() : 0.0,
