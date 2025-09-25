@@ -30,10 +30,14 @@ public class SecurityConfig {
                 .authenticationEntryPoint((req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED))
             )
             .authorizeHttpRequests(authorize -> authorize
-                // 회원가입 API는 누구나 접근 가능하도록 허용
-                .requestMatchers("/api/users/register").permitAll()
-                // 그 외 모든 요청은 인증 필요
-                .anyRequest().authenticated()
+                // 웹사이트 접속 및 정적 리소스(HTML, JS, CSS 등)는 누구나 접근 가능
+                .requestMatchers("/", "/index.html", "/assets/**", "/*.js", "/*.css", "/*.ico", "/vite.svg").permitAll()
+                // 회원가입 및 로그인 API는 누구나 접근 가능
+                .requestMatchers("/api/users/register", "/api/login").permitAll()
+                // 그 외 모든 /api/** 요청은 인증 필요
+                .requestMatchers("/api/**").authenticated()
+                // 나머지 요청은 일단 허용 (필요에 따라 authenticated()로 변경 가능)
+                .anyRequest().permitAll()
             )
             // 폼 기반 로그인 설정
             .formLogin(form -> form

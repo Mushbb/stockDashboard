@@ -9,7 +9,7 @@ export default defineConfig({
       // '/api'로 시작하는 모든 요청을 프록시합니다.
       '/api': {
         // 실제 API 서버 주소를 타겟으로 설정합니다.
-        target: 'http://localhost:8081',
+        target: 'http://10.50.131.25:8081',
         // 다른 도메인으로 요청을 보낼 때, 요청 헤더의 'origin'을
         // 타겟의 origin으로 변경합니다. CORS 에러를 피하기 위해 필수입니다.
         changeOrigin: true,
