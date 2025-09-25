@@ -24,3 +24,5 @@ export const DashboardProvider = ({ children }) => {
         </DashboardContext.Provider>
     );
 };
+
+export default useDashboard;

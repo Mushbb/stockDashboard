@@ -9,6 +9,7 @@ import ChartContainer from './ChartContainer';
 import { useResizeObserver } from './useResizeObserver';
 import SymbolChartWidget from './SymbolChartWidget';
 import KrxChartWidget from './KrxChartWidget';
+import useDashboard from "../contexts/DashboardContext.jsx";
 
 const AddWidgetModal = ({ onAdd, onClose }) => {
     const availableWidgets = [
@@ -68,14 +69,15 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
 };
 
 const WIDGET_SIZE_LIMITS = {
-    KrxChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
-    SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
+    KrxChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
+    SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
     TreemapChart: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
     RankTable: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
 };
 
 function Dashboard() {
     const { user, logout } = useAuth();
+    const { selectedAsset } = useDashboard(); // 컨텍스트 상태 가져오기
     const [widgets, setWidgets] = useState({});
     const [layouts, setLayouts] = useState({ lg: [], md: [], sm: [] });
     const [loading, setLoading] = useState(true);
@@ -237,7 +239,12 @@ function Dashboard() {
     return (
         <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
+                    <span style={{ marginLeft: '20px', fontSize: '12px', color: '#888' }}>
+                        [Debug] 현재 선택된 종목: {JSON.stringify(selectedAsset)}
+                    </span>
+                </div>
                 <div>
                     <button onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? '✅ 완료' : '✏️ 편집'}</button>
                     {isEditMode && <button onClick={() => setAddModalOpen(true)} style={{ marginLeft: '10px' }}>+ 위젯 추가</button>}
