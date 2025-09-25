@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 import { useDashboard } from '../contexts/DashboardContext';
 
-const KrxChartWidget = ({ settings, width, height }) => {
+const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange }) => {
     const chartContainerRef = useRef(null);
-    const { selectedAsset, setSelectedAsset } = useDashboard();
+    const { selectedAsset } = useDashboard();
     
-    const [symbol, setSymbol] = useState(settings.symbol || '005930');
+    const { symbol = '005930' } = settings;
+
     const [stockName, setStockName] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -17,7 +18,6 @@ const KrxChartWidget = ({ settings, width, height }) => {
     const [searchResults, setSearchResults] = useState([]);
     const [hoveredSymbol, setHoveredSymbol] = useState(null);
     const searchContainerRef = useRef(null);
-    const isComposing = useRef(false); // 한글 입력 중인지 추적 // 검색 컨테이너 ref
 
     // 외부 클릭 감지를 위한 useEffect
     useEffect(() => {
@@ -26,24 +26,22 @@ const KrxChartWidget = ({ settings, width, height }) => {
                 setIsSearching(false);
             }
         }
-        // 이벤트 리스너 등록
         document.addEventListener("mousedown", handleClickOutside);
         return () => {
-            // 클린업 함수에서 이벤트 리스너 제거
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [searchContainerRef]);
 
-    // 대시보드 컨텍스트에서 KRX 타입의 심볼이 선택되면, 이 위젯의 심볼을 업데이트
+    // 컨텍스트의 변경을 감지하여 DB에 업데이트
     useEffect(() => {
-        if (selectedAsset && selectedAsset.type === 'KRX') {
-            setSymbol(selectedAsset.symbol);
+        if (selectedAsset && selectedAsset.type === 'KRX' && selectedAsset.symbol !== symbol) {
+            onSettingsChange(widgetId, { ...settings, symbol: selectedAsset.symbol });
         }
-    }, [selectedAsset]);
+    }, [selectedAsset, onSettingsChange, widgetId, settings, symbol]);
 
-    // 검색 쿼리가 변경될 때 API 호출 (디바운싱 및 한글 입력 처리)
+    // 검색 쿼리가 변경될 때 API 호출 (디바운싱 적용)
     useEffect(() => {
-        if (isComposing.current || searchQuery.length < 2) {
+        if (searchQuery.length < 2) {
             setSearchResults([]);
             return;
         }
@@ -57,22 +55,13 @@ const KrxChartWidget = ({ settings, width, height }) => {
     }, [searchQuery]);
 
     const handleSelectStock = (stock) => {
-        setSelectedAsset({ symbol: stock.symbol, type: 'KRX' });
+        onSettingsChange(widgetId, { ...settings, symbol: stock.symbol });
         setIsSearching(false);
         setSearchQuery('');
         setSearchResults([]);
     };
 
-    const handleSearchBlur = () => {
-        console.log('Blur event fired! isMouseOverResults:', isMouseOverResults.current);
-        // 마우스가 결과 목록 위에 있지 않을 때만 검색창을 닫음
-        if (!isMouseOverResults.current) {
-            setIsSearching(false);
-        }
-    };
-
-
-    // 4. 내부 symbol 상태에 따라 차트를 그림
+    // 차트 생성 및 데이터 로딩
     useEffect(() => {
         if (!chartContainerRef.current || width === 0 || height === 0) return;
 
@@ -128,7 +117,7 @@ const KrxChartWidget = ({ settings, width, height }) => {
             resizeObserver.disconnect();
             chart.remove();
         };
-    }, [symbol, width, height]); // 이제 local symbol에 직접 의존
+    }, [symbol, width, height]);
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -149,7 +138,7 @@ const KrxChartWidget = ({ settings, width, height }) => {
                                 {searchResults.map(item => (
                                     <li 
                                         key={item.symbol} 
-                                        onClick={() => alert(item.symbol)}
+                                        onClick={() => handleSelectStock(item)}
                                         onMouseEnter={() => setHoveredSymbol(item.symbol)}
                                         onMouseLeave={() => setHoveredSymbol(null)}
                                         style={{

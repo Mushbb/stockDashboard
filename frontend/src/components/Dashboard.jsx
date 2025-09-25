@@ -59,7 +59,7 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                     case 'SymbolChartWidget':
                         return <SymbolChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} editingWidgetId={editingWidgetId} onCloseSettings={onCloseSettings} />;
                     case 'KrxChartWidget':
-                        return <KrxChartWidget settings={props} width={width} height={height} />;
+                        return <KrxChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }
