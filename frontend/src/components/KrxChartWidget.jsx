@@ -87,7 +87,7 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
         });
         chart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-        fetch(`/api/charts/krx/history?symbol=${symbol}&days=365`)
+        fetch(`/api/charts/krx/history?symbol=${symbol}&days=5844`)
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
