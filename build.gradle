@@ -41,3 +41,47 @@ tasks.named('test') {
 tasks.withType(JavaCompile) {
     options.compilerArgs += '-parameters'
 }
+
+// Frontend build automation
+
+// frontend 디렉토리 경로 설정
+def frontendDir = "${projectDir}/frontend"
+
+// npm install 실행 태스크
+task npmInstall(type: Exec) {
+    workingDir frontendDir
+    inputs.dir "${frontendDir}/public"
+    inputs.file "${frontendDir}/package.json"
+    inputs.file "${frontendDir}/package-lock.json"
+    outputs.dir "${frontendDir}/node_modules"
+    // Windows
+    commandLine 'cmd', '/c', 'npm', 'install'
+    // Unix-like
+    // commandLine 'npm', 'install'
+}
+
+// npm run build 실행 태스크
+task buildFrontend(type: Exec, dependsOn: 'npmInstall') {
+    workingDir frontendDir
+    inputs.dir "${frontendDir}/src"
+    inputs.dir "${frontendDir}/public"
+    outputs.dir "${frontendDir}/dist"
+    // Windows
+    commandLine 'cmd', '/c', 'npm', 'run', 'build'
+    // Unix-like
+    // commandLine 'npm', 'run', 'build'
+}
+
+// 빌드된 프론트엔드 파일을 static 리소스로 복사하는 태스크
+task copyFrontend(type: Copy, dependsOn: 'buildFrontend') {
+    from "${frontendDir}/dist"
+    into "${projectDir}/src/main/resources/static"
+}
+
+// bootJar 태스크가 copyFrontend 태스크에 의존하도록 설정
+bootJar.dependsOn copyFrontend
+
+// clean 태스크 실행 시 frontend 빌드 결과물도 삭제
+tasks.named('clean', Delete) {
+    delete "${frontendDir}/dist", "${frontendDir}/node_modules"
+}

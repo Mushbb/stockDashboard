@@ -68,10 +68,13 @@ function RankTable({ widgetId, settings, width, height }) {
 
     const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
 
-    // settings prop이 변경될 때마다(limit 포함) currentSettings를 업데이트
+    // 부모로부터 받는 limit prop만 동기화. 나머지 설정은 내부에서 관리.
     useEffect(() => {
-        setCurrentSettings(settings);
-    }, [settings]);
+        // 이렇게 하면 부모의 렌더링이 limit 값 변경 외에는 영향을 주지 않음.
+        if (settings.limit !== currentSettings.limit) {
+            setCurrentSettings(prev => ({ ...prev, limit: settings.limit }));
+        }
+    }, [settings.limit, currentSettings.limit]);
 
     useEffect(() => {
         const fetchData = async () => {

@@ -41,6 +41,7 @@ const AddWidgetModal = ({ onAdd, onClose }) => {
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCloseSettings }) => {
+    console.log(`[Widget ${widgetId}] Render. Type: ${type}`);
     const [ref, { width, height }] = useResizeObserver();
     const rankTableLimit = (() => {
         if (type !== 'RankTable' || height <= 70) return 10;

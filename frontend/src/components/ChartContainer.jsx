@@ -16,33 +16,37 @@ const ChartContainer = memo(({ widgetId, title, isEditMode, onRename, onDelete, 
             borderRadius: '8px'
 		}}>
 			{/* 제목 표시줄 - react-grid-layout의 드래그 핸들 역할 */}
-			<h3 
-                className="widget-title" 
-                style={{
-                    padding: '10px', 
-                    margin: 0, 
-                    borderBottom: '1px solid #ddd', 
-                    background: '#f9f9f9', 
-                    cursor: 'move',
-                    userSelect: 'none',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                }}
-            >
-                <span>{title}</span>
-                {isEditMode && (
-                    <div>
-                        {onSettings && <button onClick={onSettings} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em'}}>⚙️</button>}
-                        <button onClick={onRename} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em'}}>✏️</button>
-                        <button onClick={onDelete} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em'}}>🗑️</button>
-                    </div>
-                )}
+			<h3
+				className="widget-title"
+				style={{
+					height: '41px', // 고정 높이 (border-bottom 1px 포함)
+					padding: '0 10px',
+					margin: 0,
+					borderBottom: '1px solid #ddd',
+					background: '#f9f9f9',
+					cursor: 'move',
+					userSelect: 'none',
+					display: 'flex',
+					justifyContent: 'space-between',
+					alignItems: 'center',
+					boxSizing: 'border-box' // 패딩과 보더를 높이에 포함
+				}}
+			>
+				<span>{title}</span>
+				<div style={{ minWidth: '70px', textAlign: 'right' }}> {/* 버튼 영역 항상 공간 차지 */}
+					{isEditMode && (
+						<div>
+							{onSettings && <button onClick={onSettings} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em', padding: '4px'}}>⚙️</button>}
+							<button onClick={onRename} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em', padding: '4px'}}>✏️</button>
+							<button onClick={onDelete} data-id={widgetId} style={{border: 'none', background: 'none', cursor: 'pointer', fontSize: '1em', padding: '4px'}}>🗑️</button>
+						</div>
+					)}
+				</div>
 			</h3>
 
 			{/* 컨텐츠 영역 */}
-			<div style={{ width: '100%', height: 'calc(100% - 40px)', overflow: 'hidden' }}>
-                {children}
+			<div style={{ width: '100%', height: 'calc(100% - 41px)', overflow: 'hidden' }}>
+				{children}
 			</div>
 		</div>
 	);

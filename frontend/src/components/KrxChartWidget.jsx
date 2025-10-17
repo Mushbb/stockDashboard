@@ -3,12 +3,14 @@ import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-cha
 import { useDashboard } from '../contexts/DashboardContext';
 
 const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange }) => {
+    console.log(`[KrxChartWidget ${widgetId}] Render. Width: ${width}, Height: ${height}, Symbol: ${settings.symbol}`);
     const chartContainerRef = useRef(null);
     const { selectedAsset } = useDashboard();
     
     const { symbol = '005930' } = settings;
 
     const [stockName, setStockName] = useState('');
+    const [chartData, setChartData] = useState(null); // 데이터 상태 추가
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -24,7 +26,7 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
         function handleClickOutside(event) {
             if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
                 setIsSearching(false);
-            }
+            } 
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => {
@@ -35,9 +37,9 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
     // 컨텍스트의 변경을 감지하여 DB에 업데이트
     useEffect(() => {
         if (selectedAsset && selectedAsset.type === 'KRX' && selectedAsset.symbol !== symbol) {
-            onSettingsChange(widgetId, { ...settings, symbol: selectedAsset.symbol });
+            onSettingsChange(widgetId, { symbol: selectedAsset.symbol });
         }
-    }, [selectedAsset, onSettingsChange, widgetId, settings, symbol]);
+    }, [selectedAsset, onSettingsChange, widgetId, symbol]);
 
     // 검색 쿼리가 변경될 때 API 호출 (디바운싱 적용)
     useEffect(() => {
@@ -61,12 +63,33 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
         setSearchResults([]);
     };
 
-    // 차트 생성 및 데이터 로딩
+    // 데이터 로딩 useEffect
     useEffect(() => {
-        if (!chartContainerRef.current || width === 0 || height === 0) return;
-
+        console.log(`[KrxChartWidget ${widgetId}] Fetching data for symbol: ${symbol}`);
+        if (!symbol) return;
         setLoading(true);
         setError(null);
+        fetch(`/api/charts/krx/history?symbol=${symbol}&days=5844`)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                setStockName(data.stockName);
+                setChartData(data.history);
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Fetch data error:", err);
+                setChartData(null); // 에러 발생 시 데이터 초기화
+                setLoading(false);
+            });
+    }, [symbol]);
+
+    // 차트 생성 및 렌더링 useEffect
+    useEffect(() => {
+        console.log(`[KrxChartWidget ${widgetId}] Rendering chart. Width: ${width}, Height: ${height}`);
+        if (!chartContainerRef.current || !chartData || width === 0 || height === 0) return;
 
         const chart = createChart(chartContainerRef.current, {
             width: width,
@@ -87,24 +110,10 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
         });
         chart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-        fetch(`/api/charts/krx/history?symbol=${symbol}&days=5844`)
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
-            .then(chartData => {
-                setStockName(chartData.stockName);
-                const candleData = chartData.history.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-                const volumeData = chartData.history.map(d => ({ time: d.time, value: d.volume, color: d.close > d.open ? 'rgba(209, 66, 66, 0.5)' : 'rgba(66, 135, 209, 0.5)' }));
-                candlestickSeries.setData(candleData);
-                volumeSeries.setData(volumeData);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Fetch data error:", err);
-                setError(err.message);
-                setLoading(false);
-            });
+        const candleData = chartData.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
+        const volumeData = chartData.map(d => ({ time: d.time, value: d.volume, color: d.close > d.open ? 'rgba(209, 66, 66, 0.5)' : 'rgba(66, 135, 209, 0.5)' }));
+        candlestickSeries.setData(candleData);
+        volumeSeries.setData(volumeData);
 
         const resizeObserver = new ResizeObserver(entries => {
             for (let entry of entries) {
@@ -117,7 +126,7 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
             resizeObserver.disconnect();
             chart.remove();
         };
-    }, [symbol, width, height]);
+    }, [chartData, width, height]);
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
