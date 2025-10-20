@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.example'
-version = '0.0.1-SNAPSHOT'
+version = ''
 description = 'stockDashboard'
 
 java {
@@ -78,10 +78,5 @@ task copyFrontend(type: Copy, dependsOn: 'buildFrontend') {
     into "${projectDir}/src/main/resources/static"
 }
 
-// bootJar 태스크가 copyFrontend 태스크에 의존하도록 설정
-bootJar.dependsOn copyFrontend
-
-// clean 태스크 실행 시 frontend 빌드 결과물도 삭제
-tasks.named('clean', Delete) {
-    delete "${frontendDir}/dist", "${frontendDir}/node_modules"
-}
+// processResources가 copyFrontend에 의존하도록 설정하여, 리소스 처리 전에 프론트엔드 파일이 복사되도록 보장합니다.
+processResources.dependsOn copyFrontend
