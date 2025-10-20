@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import _ from 'lodash';
 import { useDashboard } from '../contexts/DashboardContext';
 
@@ -60,7 +60,7 @@ const SettingsModal = ({ settings, onColumnToggle, onWidthChange, onClose }) => 
 
 function RankTable({ widgetId, settings, width, height }) {
     const { setSelectedAsset } = useDashboard();
-    const [data, setData] = useState([]);
+    const [fullData, setFullData] = useState([]); // 전체 데이터를 저장할 상태
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentSettings, setCurrentSettings] = useState(settings);
@@ -68,38 +68,49 @@ function RankTable({ widgetId, settings, width, height }) {
 
     const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
 
-    // 부모로부터 받는 limit prop만 동기화. 나머지 설정은 내부에서 관리.
+    // 부모로부터 받는 limit prop만 동기화.
     useEffect(() => {
-        // 이렇게 하면 부모의 렌더링이 limit 값 변경 외에는 영향을 주지 않음.
         if (settings.limit !== currentSettings.limit) {
             setCurrentSettings(prev => ({ ...prev, limit: settings.limit }));
         }
-    }, [settings.limit, currentSettings.limit]);
+    }, [settings.limit]);
 
+    // 데이터 fetch에 영향을 주는 설정값들이 변경될 때만 fetchKey를 재생성
+    const fetchKey = useMemo(() => {
+        const { by, market, order, mode } = currentSettings;
+        return `${mode}-${by}-${market}-${order}`;
+    }, [currentSettings.by, currentSettings.market, currentSettings.order, currentSettings.mode]);
+
+
+    // fetchKey가 변경될 때만 데이터를 다시 가져옴
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                const { by, market = 'ALL', order = 'DESC', limit = 10, mode = 'default' } = currentSettings;
+                const { by, market = 'ALL', order = 'DESC', mode = 'default' } = currentSettings;
+                const fetchLimit = 100; // 항상 최대 100개를 가져옴
                 let url;
+
                 if (mode === 'top-and-bottom') {
-                    url = `/api/market/rank/top-and-bottom?market=${market}&limit=${limit}`;
+                    url = `/api/market/rank/top-and-bottom?market=${market}&limit=${fetchLimit}`;
                 } else {
-                    url = `/api/market/rank?by=${by}&market=${market}&order=${order}&limit=${limit}`;
+                    url = `/api/market/rank?by=${by}&market=${market}&order=${order}&limit=${fetchLimit}`;
                 }
+                
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const result = await response.json();
-                setData(result);
+                setFullData(result); // 전체 데이터를 저장
             } catch (e) {
                 console.error("Fetch data error:", e);
                 setError(e.message);
+                setFullData([]);
             } finally {
                 setIsLoading(false);
             }
         };
         fetchData();
-    }, [currentSettings]);
+    }, [fetchKey]);
 
     const debouncedSave = useCallback(
         _.debounce((newSettings) => {
@@ -156,6 +167,9 @@ function RankTable({ widgetId, settings, width, height }) {
 
     const visibleColumns = currentSettings.visibleColumns || ['currentPrice', 'changeRate'];
     const columnWidths = currentSettings.columnWidths || defaultColumnWidths;
+    const displayData = useMemo(() => {
+        return fullData.slice(0, currentSettings.limit || 10);
+    }, [fullData, currentSettings.limit]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -193,7 +207,7 @@ function RankTable({ widgetId, settings, width, height }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.map((item, index) => (
+                            {displayData.map((item, index) => (
                                 <tr 
                                     key={index} 
                                     style={{ borderBottom: '1px solid #f5f5f5', cursor: 'pointer' }}
