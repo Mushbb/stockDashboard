@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import _ from 'lodash';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { DataProvider } from '../contexts/DataProvider'; // DataProvider 임포트
 import { LoginModal } from './LoginModal';
 import TreemapChart from './TreemapChart';
 import RankTable from './RankTable';
@@ -41,7 +43,6 @@ const AddWidgetModal = ({ onAdd, onClose }) => {
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCloseSettings }) => {
-    console.log(`[Widget ${widgetId}] Render. Type: ${type}`);
     const [ref, { width, height }] = useResizeObserver();
     const rankTableLimit = (() => {
         if (type !== 'RankTable' || height <= 70) return 10;
@@ -54,9 +55,9 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                 if (width === 0 || height === 0) return null;
                 switch (type) {
                     case 'TreemapChart':
-                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-45} />;
+                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-40} onSettingsChange={onSettingsChange} />;
                     case 'RankTable':
-                        return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} />;
+                        return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} onSettingsChange={onSettingsChange} />;
                     case 'SymbolChartWidget':
                         return <SymbolChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} editingWidgetId={editingWidgetId} onCloseSettings={onCloseSettings} />;
                     case 'KrxChartWidget':
@@ -78,7 +79,8 @@ const WIDGET_SIZE_LIMITS = {
 
 function Dashboard() {
     const { user, logout } = useAuth();
-    const { selectedAsset } = useDashboard(); // 컨텍스트 상태 가져오기
+    const { showToast } = useToast();
+    const { selectedAsset } = useDashboard();
     const [widgets, setWidgets] = useState({});
     const [layouts, setLayouts] = useState({ lg: [], md: [], sm: [] });
     const [loading, setLoading] = useState(true);
@@ -87,15 +89,6 @@ function Dashboard() {
     const [isLoginModalOpen, setLoginModalOpen] = useState(false);
     const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
     const [editingWidgetId, setEditingWidgetId] = useState(null);
-
-    const handleSettings = useCallback((event) => {
-        const widgetId = event.currentTarget.dataset.id;
-        setEditingWidgetId(widgetId);
-    }, []);
-
-    const handleCloseSettings = useCallback(() => {
-        setEditingWidgetId(null);
-    }, []);
 
     useEffect(() => {
         if (user) {
@@ -208,22 +201,74 @@ function Dashboard() {
         }
     }, [widgets, layouts]);
 
+    const handleSettings = useCallback((event) => {
+        const widgetId = event.currentTarget.dataset.id;
+        setEditingWidgetId(widgetId);
+    }, []);
+
+    const handleCloseSettings = useCallback(() => {
+        setEditingWidgetId(null);
+    }, []);
+
+    // 중앙화된 위젯 설정 저장 로직
+    const debouncedSave = useRef(
+        _.debounce((widgetId, settingsToSave) => {
+            fetch(`/api/widgets/${widgetId}/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsToSave),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                showToast('설정이 저장되었습니다.', 'info');
+            })
+            .catch(err => {
+                console.error(`Failed to save widget settings for ${widgetId}:`, err);
+                showToast('설정 저장에 실패했습니다.', 'error');
+            });
+        }, 1000)
+    ).current;
+
     const handleWidgetSettingsChange = useCallback((widgetId, newSettings) => {
-        const originalWidgets = widgets;
+        // UI 즉시 반응을 위해 위젯 상태를 먼저 업데이트
         setWidgets(prev => ({
             ...prev,
             [widgetId]: { ...prev[widgetId], props: newSettings }
         }));
+        
+        // 실제 저장은 debounce를 통해 실행
+        const { limit, ...settingsToSave } = newSettings;
+        debouncedSave(widgetId, settingsToSave);
+    }, [debouncedSave]);
 
-        fetch(`/api/widgets/${widgetId}/settings`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newSettings),
-        }).catch(err => {
-            console.error('Failed to save widget settings:', err);
-            setWidgets(originalWidgets); // 오류 발생 시 원래 상태로 복원
+    // 현재 활성화된 위젯을 기반으로 DataProvider가 요청할 데이터 키 목록을 생성
+    const requiredDataKeys = useMemo(() => {
+        const keys = new Set();
+        Object.values(widgets).forEach(widget => {
+            const settings = widget.props || {};
+            switch (widget.type) {
+                case 'TreemapChart':
+                    keys.add(`treemap_${(settings.marketType || 'ALL').toUpperCase()}`);
+                    break;
+                case 'RankTable':
+                    if (settings.mode === 'top-and-bottom') {
+                        keys.add(`rank_${(settings.market || 'ALL').toUpperCase()}_CHANGE_RATE_TOP_AND_BOTTOM`);
+                    } else {
+                        const by = settings.by || 'CHANGE_RATE';
+                        const order = settings.order || 'DESC';
+                        const market = settings.market || 'ALL';
+                        keys.add(`rank_${market.toUpperCase()}_${by.toUpperCase()}_${order.toUpperCase()}`);
+                    }
+                    break;
+                default:
+                    break;
+            }
         });
+        return Array.from(keys);
     }, [widgets]);
+
 
     if (loading && !user) return <div>Loading...</div>;
 
@@ -238,59 +283,61 @@ function Dashboard() {
     }
 
     return (
-        <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
-                    <span style={{ marginLeft: '20px', fontSize: '12px', color: '#888' }}>
-                        [Debug] 현재 선택된 종목: {JSON.stringify(selectedAsset)}
-                    </span>
-                </div>
-                <div>
-                    <button onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? '✅ 완료' : '✏️ 편집'}</button>
-                    {isEditMode && <button onClick={() => setAddModalOpen(true)} style={{ marginLeft: '10px' }}>+ 위젯 추가</button>}
-                    <button onClick={logout} style={{ marginLeft: '10px' }}>로그아웃</button>
-                </div>
-            </div>
-
-            {isAddModalOpen && <AddWidgetModal onAdd={handleAddWidget} onClose={() => setAddModalOpen(false)} />}
-
-            <ResponsiveGridLayout
-                className="layout"
-                layouts={layouts}
-                breakpoints={{ lg: 1200, md: 768, sm: 0 }}
-                cols={{ lg: 4, md: 3, sm: 2 }}
-                rowHeight={250}
-                isDraggable={isEditMode}
-                isResizable={isEditMode}
-                draggableHandle=".widget-title"
-                onLayoutChange={onLayoutChange}
-                onBreakpointChange={onBreakpointChange}
-                style={{ transform: 'scale(1)' }}
-            >
-                {Object.keys(widgets).map(key => (
-                    <div key={key}>
-                        <ChartContainer 
-                            widgetId={key}
-                            title={widgets[key].title}
-                            isEditMode={isEditMode}
-                            onRename={handleRenameWidget}
-                            onDelete={handleDeleteWidget}
-                            onSettings={widgets[key].type === 'SymbolChartWidget' ? handleSettings : null}
-                        >
-                            <Widget 
-                                widgetId={key} 
-                                type={widgets[key].type} 
-                                props={widgets[key].props} 
-                                onSettingsChange={handleWidgetSettingsChange} // 안정적인 함수 전달
-                                editingWidgetId={editingWidgetId}
-                                onCloseSettings={handleCloseSettings} // 안정적인 함수 전달
-                            />
-                        </ChartContainer>
+        <DataProvider requiredDataKeys={requiredDataKeys}>
+            <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
+                        <span style={{ marginLeft: '20px', fontSize: '12px', color: '#888' }}>
+                            [Debug] 현재 선택된 종목: {JSON.stringify(selectedAsset)}
+                        </span>
                     </div>
-                ))}
-            </ResponsiveGridLayout>
-        </div>
+                    <div>
+                        <button onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? '✅ 완료' : '✏️ 편집'}</button>
+                        {isEditMode && <button onClick={() => setAddModalOpen(true)} style={{ marginLeft: '10px' }}>+ 위젯 추가</button>}
+                        <button onClick={logout} style={{ marginLeft: '10px' }}>로그아웃</button>
+                    </div>
+                </div>
+
+                {isAddModalOpen && <AddWidgetModal onAdd={handleAddWidget} onClose={() => setAddModalOpen(false)} />}
+
+                <ResponsiveGridLayout
+                    className="layout"
+                    layouts={layouts}
+                    breakpoints={{ lg: 1200, md: 768, sm: 0 }}
+                    cols={{ lg: 4, md: 3, sm: 2 }}
+                    rowHeight={250}
+                    isDraggable={isEditMode}
+                    isResizable={isEditMode}
+                    draggableHandle=".widget-title"
+                    onLayoutChange={onLayoutChange}
+                    onBreakpointChange={onBreakpointChange}
+                    style={{ transform: 'scale(1)' }}
+                >
+                    {Object.keys(widgets).map(key => (
+                        <div key={key}>
+                            <ChartContainer 
+                                widgetId={key}
+                                title={widgets[key].title}
+                                isEditMode={isEditMode}
+                                onRename={handleRenameWidget}
+                                onDelete={handleDeleteWidget}
+                                onSettings={widgets[key].type === 'SymbolChartWidget' ? handleSettings : null}
+                            >
+                                <Widget 
+                                    widgetId={key} 
+                                    type={widgets[key].type} 
+                                    props={widgets[key].props} 
+                                    onSettingsChange={handleWidgetSettingsChange}
+                                    editingWidgetId={editingWidgetId}
+                                    onCloseSettings={handleCloseSettings}
+                                />
+                            </ChartContainer>
+                        </div>
+                    ))}
+                </ResponsiveGridLayout>
+            </div>
+        </DataProvider>
     );
 }
 

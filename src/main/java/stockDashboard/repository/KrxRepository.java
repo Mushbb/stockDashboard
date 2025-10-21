@@ -58,19 +58,31 @@ public class KrxRepository {
 	 */
 	public List<MarketDataDto> getLiveMarketData() {
 		String sql = """
+				WITH RankedMetrics AS (
+				    SELECT 
+				        m.*,
+				        ROW_NUMBER() OVER(PARTITION BY m.ISU_SRT_CD ORDER BY m.collected_at DESC) as rn
+				    FROM 
+				        daily_metrics m
+				    WHERE 
+				        m.metric_date = (SELECT MAX(metric_date) FROM daily_metrics)
+				)
 				SELECT 
-				    m.ISU_SRT_CD, n_hist.value AS node_name, s_hist.value AS sector_name, m_hist.value AS market_type,
-				    m.metric_date, m.collected_at, m.MKTCAP, m.FLUC_RT, 
-				    m.TDD_CLSPRC, m.TDD_OPNPRC, m.TDD_HGPRC, m.TDD_LWPRC, m.ACC_TRDVOL, m.ACC_TRDVAL
-				FROM daily_metrics m 
-					INNER JOIN stock_history n_hist ON m.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME'
-					INNER JOIN stock_history s_hist ON m.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR'
-					INNER JOIN stock_history m_hist ON m.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET'
-				WHERE m.collected_at = ( SELECT MAX(collected_at) FROM daily_metrics )
-					AND n_hist.end_date IS NULL
-					AND s_hist.end_date IS NULL
-					AND m_hist.end_date IS NULL
-				ORDER BY m.MKTCAP DESC
+				    rm.ISU_SRT_CD, n_hist.value AS node_name, s_hist.value AS sector_name, m_hist.value AS market_type,
+				    rm.metric_date, rm.collected_at, rm.MKTCAP, rm.FLUC_RT, 
+				    rm.TDD_CLSPRC, rm.TDD_OPNPRC, rm.TDD_HGPRC, rm.TDD_LWPRC, rm.ACC_TRDVOL, rm.ACC_TRDVAL
+				FROM 
+				    RankedMetrics rm
+				LEFT JOIN 
+				    stock_history n_hist ON rm.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME' AND n_hist.end_date IS NULL
+				LEFT JOIN 
+				    stock_history s_hist ON rm.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR' AND s_hist.end_date IS NULL
+				LEFT JOIN 
+				    stock_history m_hist ON rm.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET' AND m_hist.end_date IS NULL
+				WHERE 
+				    rm.rn = 1
+				ORDER BY 
+				    rm.MKTCAP DESC
 				""";
 
 		List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);

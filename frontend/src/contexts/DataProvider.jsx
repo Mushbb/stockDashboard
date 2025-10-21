@@ -2,63 +2,63 @@ import React, { createContext, useState, useEffect, useCallback, useMemo, useCon
 
 const DataContext = createContext(null);
 
-export function DataProvider({ children }) {
-	const [marketData, setMarketData] = useState({ kospi: null, kosdaq: null });
-	const [isLoading, setIsLoading] = useState({ kospi: true, kosdaq: true });
+export function DataProvider({ requiredDataKeys, children }) {
+	const [data, setData] = useState({});
+	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState(null);
 
-	const fetchData = useCallback(async () => {
-		setIsLoading({ kospi: true, kosdaq: true });
+	const fetchData = useCallback(async (keys) => {
+        if (keys.length === 0) {
+            setData({});
+            setIsLoading(false);
+            return;
+        }
+
+		setIsLoading(true);
 		setError(null);
 
 		try {
-			// KOSPI와 KOSDAQ API를 동시에 호출합니다.
-			const [kospiResponse, kosdaqResponse] = await Promise.all([
-				fetch('/api/charts/treemap/kospi'),
-				fetch('/api/charts/treemap/kosdaq')
-			]);
+            const response = await fetch('/api/dashboard/dynamic-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(keys),
+            });
 
-			if (!kospiResponse.ok || !kosdaqResponse.ok) {
-				throw new Error('API 서버에서 데이터를 가져오는데 실패했습니다.');
+			if (!response.ok) {
+				throw new Error('Failed to fetch dynamic dashboard data.');
 			}
 
-			// 각 응답을 JSON으로 변환합니다.
-			const kospiData = await kospiResponse.json();
-			const kosdaqData = await kosdaqResponse.json();
-
-			// 백엔드에서 이미 가공된 데이터를 그대로 상태에 저장합니다.
-			setMarketData({
-				kospi: kospiData,
-				kosdaq: kosdaqData
-			});
+			const result = await response.json();
+			setData(result);
 
 		} catch (err) {
 			console.error(err);
 			setError(err.message);
 		} finally {
-			setIsLoading({ kospi: false, kosdaq: false });
+			setIsLoading(false);
 		}
 	}, []);
 
-	// 컴포넌트가 처음 마운트될 때, 그리고 30초마다 데이터를 새로고침합니다.
+    // requiredDataKeys가 변경되거나 30초마다 데이터를 새로고침합니다.
 	useEffect(() => {
-		fetchData();
-		const intervalId = setInterval(fetchData, 30000);
+        const keysString = JSON.stringify(requiredDataKeys.sort());
+
+		fetchData(requiredDataKeys);
+
+		const intervalId = setInterval(() => fetchData(requiredDataKeys), 30000);
+
 		return () => clearInterval(intervalId);
-	}, [fetchData]);
+	}, [fetchData, JSON.stringify(requiredDataKeys.sort())]); // 키 목록이 바뀌면 즉시 재실행
 
-	const getChartData = useCallback((marketType) => {
-		return {
-			data: marketData[marketType],
-			isLoading: isLoading[marketType],
-			error: error
-		};
-	}, [marketData, isLoading, error]);
-
-	const value = useMemo(() => ({ getChartData }), [getChartData]);
+	const value = useMemo(() => ({ data, isLoading, error }), [data, isLoading, error]);
 
 	return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
-export const useData = () => useContext(DataContext);
-
+export const useData = () => {
+    const context = useContext(DataContext);
+    if (!context) {
+        throw new Error('useData must be used within a DataProvider');
+    }
+    return context;
+};

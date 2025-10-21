@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import _ from 'lodash';
 
 import { useDashboard } from '../contexts/DashboardContext';
+import { useData } from '../contexts/DataProvider'; // 중앙 데이터 공급자 import
 
 // Helper functions (unchanged)
 function pruneByPixel(root, minPixel) {
@@ -41,13 +42,9 @@ const findNodeByPath = (root, path) => {
 	return current;
 };
 
-function TreemapChart({ widgetId, settings, width, height }) {
+function TreemapChart({ widgetId, settings, width, height, onSettingsChange }) {
     const { setSelectedAsset } = useDashboard();
-    const [data, setData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    // settings.marketType을 명시적으로 확인하고, 없으면 'ALL'을 기본값으로 사용
-    const [currentMarket, setCurrentMarket] = useState(settings && settings.marketType ? settings.marketType : 'ALL');
+    const { data: dashboardData, isLoading, error } = useData();
 
     const [view, setView] = useState(null);
     const [colorScale, setColorScale] = useState(null);
@@ -58,35 +55,12 @@ function TreemapChart({ widgetId, settings, width, height }) {
 	
     const MIN_PIXEL = 15;
 
-    // 설정 저장을 위한 debounced 함수 추가
-    const debouncedSave = useCallback(
-        _.debounce((newSettings) => {
-            fetch(`/api/widgets/${widgetId}/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newSettings),
-            }).catch(error => console.error(`Failed to save settings for widget ${widgetId}:`, error));
-        }, 1000),
-        [widgetId]
-    );
+    // 위젯 설정에서 현재 시장 타입을 가져옴
+    const currentMarket = settings?.marketType || 'ALL';
+    // 중앙 데이터에서 이 위젯에 필요한 데이터를 추출
+    const data = dashboardData[`treemap_${currentMarket.toUpperCase()}`];
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const response = await fetch(`/api/charts/treemap/${currentMarket.toLowerCase()}`);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const result = await response.json();
-                setData(result);
-            } catch (e) {
-                setError(e.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchData();
-    }, [currentMarket]);
+
 
     useEffect(() => {
 		const color = d3.scaleDivergingPow().domain([-30, 0, 30]).exponent(0.15)
@@ -119,16 +93,26 @@ function TreemapChart({ widgetId, settings, width, height }) {
 		}
 	}, [data]);
 
+    // 줌/아웃 핸들러: 부모(Dashboard)의 중앙 관리 함수를 호출
+    const handleViewChange = (newView) => {
+        if (!newView) return;
+        const newPath = getNodePath(newView);
+        // UI는 즉시 업데이트
+        currentPathRef.current = newPath;
+        setView(newView);
+        // 변경된 경로는 중앙 관리 함수를 통해 저장
+        onSettingsChange(widgetId, { ...settings, path: newPath });
+    }
+
     const handleMarketChange = (newMarket) => {
         if (newMarket === currentMarket) return;
-        setCurrentMarket(newMarket);
-        // 시장 변경 시 경로를 루트로 리셋하고 저장
-        const newSettings = { ...settings, marketType: newMarket, path: null };
-        currentPathRef.current = null; 
-        setView(null); 
-        debouncedSave(newSettings);
+        // 경로를 리셋하고, 새로운 시장 타입으로 설정을 변경하도록 부모에게 알림
+        onSettingsChange(widgetId, { ...settings, marketType: newMarket, path: null });
+        currentPathRef.current = null;
+        setView(null);
     };
 
+    // D3 렌더링
     useEffect(() => {
 		if (!view || !colorScale || width <= 0 || height <= 0) {
 			const svg = d3.select(svgRef.current);
@@ -145,36 +129,30 @@ function TreemapChart({ widgetId, settings, width, height }) {
 		const y = d3.scaleLinear().rangeRound([0, height]).domain([displayRoot.y0, displayRoot.y1]);
 		const svg = d3.select(svgRef.current).attr('width', width).attr('height', height);
 		svg.selectAll('*').remove();
-		        // 줌 아웃 핸들러에 저장 로직 추가
-		        svg.on('contextmenu', (event) => {
-					event.preventDefault();
-					if (view && view.parent) {
-		                const newPath = getNodePath(view.parent);
-						currentPathRef.current = newPath;
-						setView(view.parent);
-		                debouncedSave({ ...settings, path: newPath });
-					}
-				});
 		
-				const group = svg.append('g');
-				const cell = group.selectAll('g').data(displayRoot.children || []).join('g')
-					.attr('transform', d => `translate(${x(d.x0)}, ${y(d.y0)})`)
-					.style('cursor', d => (d.children ? 'pointer' : 'default'))
-		            // 줌인 핸들러에 저장 로직 추가
-					.on('click', (event, d) => {
-						if (d.children) { // 섹터 클릭 시 줌인
-							const nextView = (view.children || []).find(child => child.data.name === d.data.name);
-							if (nextView) {
-		                        const newPath = getNodePath(nextView);
-								currentPathRef.current = newPath;
-								setView(nextView);
-		                        debouncedSave({ ...settings, path: newPath });
-							}
-						} else { // 종목(leaf) 클릭 시 동기화
-							event.stopPropagation(); // 줌인 방지
-							setSelectedAsset({ symbol: d.data.symbol, type: 'KRX' });
-						}
-					});		cell.append('rect')
+        svg.on('contextmenu', (event) => {
+			event.preventDefault();
+			if (view && view.parent) {
+                handleViewChange(view.parent);
+			}
+		});
+
+		const group = svg.append('g');
+		const cell = group.selectAll('g').data(displayRoot.children || []).join('g')
+			.attr('transform', d => `translate(${x(d.x0)}, ${y(d.y0)})`)
+			.style('cursor', d => (d.children ? 'pointer' : 'default'))
+			.on('click', (event, d) => {
+				if (d.children) { // 섹터 클릭 시 줌인
+					const nextView = (view.children || []).find(child => child.data.name === d.data.name);
+					if (nextView) {
+                        handleViewChange(nextView);
+					}
+				} else { // 종목(leaf) 클릭 시 동기화
+					event.stopPropagation(); // 줌인 방지
+					setSelectedAsset({ symbol: d.data.symbol, type: 'KRX' });
+				}
+			});
+		cell.append('rect')
 			.attr('fill', d => colorScale(d.data.fluc_rate))
 			.attr('width', d => x(d.x1) - x(d.x0))
 			.attr('height', d => y(d.y1) - y(d.y0));
@@ -195,7 +173,7 @@ function TreemapChart({ widgetId, settings, width, height }) {
         cell.append('title').text(d => `${d.data.name}\n`+(isNaN(d.data.cur_price)?"":`현재가: ${d3.format(",")(d.data.cur_price)} 원\n`)
             +`등락률: ${(d.data.fluc_rate || 0).toFixed(2)}%\n시가총액: ${d.value?.toLocaleString()} 원`);
         
-    }, [view, colorScale, width, height, settings, debouncedSave, setSelectedAsset]);
+    }, [view, colorScale, width, height, handleViewChange, setSelectedAsset]);
     
     return (
         <div 
@@ -208,7 +186,7 @@ function TreemapChart({ widgetId, settings, width, height }) {
                     {view && view.ancestors().reverse().map(d => d.data.name).join(' > ')}
                 </h3>
                 <div>
-                    {['ALL', 'KOSPI', 'KOSDAQ'].map(market => (
+                    {['ALL', 'KOSPI', 'KOSDAQ', 'ETF'].map(market => (
                         <button 
                             key={market}
                             onClick={() => handleMarketChange(market)}

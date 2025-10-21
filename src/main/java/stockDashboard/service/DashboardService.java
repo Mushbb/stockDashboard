@@ -45,23 +45,38 @@ public class DashboardService {
         try {
             List<MarketDataDto> liveMarketData = krxRepository.getLiveMarketData();
 
-            // KOSPI, KOSDAQ, ALL 데이터를 트리맵 구조로 각각 가공
-            TreemapDto kospiTreemap = transformToTreemapDto(liveMarketData, "KOSPI");
-            TreemapDto kosdaqTreemap = transformToTreemapDto(liveMarketData, "KOSDAQ");
-            TreemapDto allTreemap = transformToTreemapDto(liveMarketData, "ALL");
+            // 주식과 ETF 데이터 분리 (marketType의 null 여부로 구분)
+            List<MarketDataDto> stockData = liveMarketData.stream()
+                .filter(d -> d.marketType() != null)
+                .toList();
+            List<MarketDataDto> etfData = liveMarketData.stream()
+                .filter(d -> d.marketType() == null)
+                .toList();
 
-            // 가공된 최종 DTO를 명확히 분리된 키로 캐시에 저장
+            // 주식 데이터로 KOSPI, KOSDAQ, ALL 트리맵 생성
+            TreemapDto kospiTreemap = transformToTreemapDto(stockData, "KOSPI");
+            TreemapDto kosdaqTreemap = transformToTreemapDto(stockData, "KOSDAQ");
+            TreemapDto allTreemap = transformToTreemapDto(stockData, "ALL");
+            
+            // ETF 데이터로 ETF 트리맵 생성
+            TreemapDto etfTreemap = transformToTreemapDto(etfData, "ETF");
+
+            // 가공된 최종 DTO를 캐시에 저장
             cache.put("treemap_KOSPI", kospiTreemap);
             cache.put("treemap_KOSDAQ", kosdaqTreemap);
             cache.put("treemap_ALL", allTreemap);
+            cache.put("treemap_ETF", etfTreemap); // ETF 트리맵 추가
 
             // --- 랭킹 데이터 가공 및 캐싱 추가 ---
-            cache.put("rank_KOSPI_MARKET_CAP_DESC", createRankData(liveMarketData, "KOSPI", "MARKET_CAP", "DESC", 100));
-            cache.put("rank_KOSDAQ_MARKET_CAP_DESC", createRankData(liveMarketData, "KOSDAQ", "MARKET_CAP", "DESC", 100));
+            // 주식 시장 순위
+            cache.put("rank_KOSPI_MARKET_CAP_DESC", createRankData(stockData, "KOSPI", "MARKET_CAP", "DESC", 100));
+            cache.put("rank_KOSDAQ_MARKET_CAP_DESC", createRankData(stockData, "KOSDAQ", "MARKET_CAP", "DESC", 100));
+            
+            // 전체 시장 순위 (주식 + ETF)
             cache.put("rank_ALL_CHANGE_RATE_DESC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "DESC", 100));
-            cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100)); // 하한가
+            cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100));
             cache.put("rank_ALL_VOLUME_DESC", createRankData(liveMarketData, "ALL", "VOLUME", "DESC", 100));
-            cache.put("rank_ALL_TRADE_VALUE_DESC", createRankData(liveMarketData, "ALL", "TRADE_VALUE", "DESC", 100)); // 거래대금 캐싱 추가
+            cache.put("rank_ALL_TRADE_VALUE_DESC", createRankData(liveMarketData, "ALL", "TRADE_VALUE", "DESC", 100));
             
             List<RankItemDto> topAndBottom = createTopAndBottomRankData(liveMarketData, "ALL", 100);
             cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", topAndBottom);
@@ -169,12 +184,17 @@ public class DashboardService {
      * @return D3.js가 사용하는 계층 구조와 동일한 TreemapDto
      */
     private TreemapDto transformToTreemapDto(List<MarketDataDto> flatData, String marketName) {
-        // 1. 해당 시장 데이터만 필터링 ("ALL" 이면 전체 데이터 사용)
-        List<MarketDataDto> marketSpecificData = "ALL".equalsIgnoreCase(marketName)
-                ? flatData
-                : flatData.stream()
-                    .filter(d -> marketName.equalsIgnoreCase(d.marketType()))
-                    .toList();
+        // 1. 해당 시장 데이터만 필터링
+        List<MarketDataDto> marketSpecificData;
+        if ("ETF".equalsIgnoreCase(marketName) || "ALL".equalsIgnoreCase(marketName)) {
+            // ETF 또는 ALL의 경우, 이미 필터링된 데이터(또는 전체)를 그대로 사용
+            marketSpecificData = flatData;
+        } else {
+            // KOSPI, KOSDAQ의 경우 marketType으로 필터링
+            marketSpecificData = flatData.stream()
+                .filter(d -> marketName.equalsIgnoreCase(d.marketType()))
+                .toList();
+        }
 
         if (marketSpecificData.isEmpty()) {
             return new TreemapDto(marketName, List.of());
@@ -206,5 +226,17 @@ public class DashboardService {
         // "ALL"일 경우 최상위 이름을 "통합 시장"으로 설정
         String rootName = "ALL".equalsIgnoreCase(marketName) ? "통합 시장" : marketName;
         return new TreemapDto(rootName, sectorChildren);
+    }
+
+    /**
+     * 요청된 키 목록에 해당하는 캐시 데이터를 조회합니다.
+     */
+    public Map<String, Object> getDynamicData(List<String> dataKeys) {
+        if (dataKeys == null || dataKeys.isEmpty()) {
+            return Map.of();
+        }
+        return dataKeys.stream()
+            .filter(cache::containsKey)
+            .collect(Collectors.toMap(key -> key, cache::get));
     }
 }

@@ -7,8 +7,11 @@ import stockDashboard.dto.TreemapDto;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
+import java.util.Map;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,5 +55,15 @@ public class DashboardController {
             @RequestParam(value = "market", defaultValue = "ALL") String market,
             @RequestParam(value = "limit", defaultValue = "10") int limit) {
         return serv.getTopAndBottomRankData(market, limit);
+    }
+
+    /**
+     * 요청된 키 목록에 해당하는 모든 대시보드 데이터를 반환합니다.
+     * @param dataKeys 프론트엔드에서 필요한 데이터 키의 목록
+     * @return 데이터 키와 실제 데이터 객체로 구성된 Map
+     */
+    @PostMapping("/api/dashboard/dynamic-data")
+    public Map<String, Object> getDynamicDashboardData(@RequestBody List<String> dataKeys) {
+        return serv.getDynamicData(dataKeys);
     }
 }

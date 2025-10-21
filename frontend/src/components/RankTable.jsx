@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import _ from 'lodash';
 import { useDashboard } from '../contexts/DashboardContext';
+import { useData } from '../contexts/DataProvider'; // 중앙 데이터 공급자 import
 
 const formatNumber = (num) => num?.toLocaleString() || '-';
 const formatRate = (rate) => (rate > 0 ? `+${rate.toFixed(2)}%` : `${rate?.toFixed(2) || '-'}%`);
@@ -58,118 +59,71 @@ const SettingsModal = ({ settings, onColumnToggle, onWidthChange, onClose }) => 
     );
 };
 
-function RankTable({ widgetId, settings, width, height }) {
+// onSettingsChange 프롭 추가
+function RankTable({ widgetId, settings, width, height, onSettingsChange }) {
     const { setSelectedAsset } = useDashboard();
-    const [fullData, setFullData] = useState([]); // 전체 데이터를 저장할 상태
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [currentSettings, setCurrentSettings] = useState(settings);
+    // 중앙 데이터 공급자로부터 데이터와 로딩 상태를 가져옴
+    const { data: dashboardData, isLoading, error } = useData();
+    
     const [showSettings, setShowSettings] = useState(false);
+
+    // 이 위젯에 필요한 데이터 키를 설정으로부터 계산
+    const dataKey = useMemo(() => {
+        const { by, market = 'ALL', order = 'DESC', mode = 'default' } = settings;
+        if (mode === 'top-and-bottom') {
+            return `rank_${market.toUpperCase()}_CHANGE_RATE_TOP_AND_BOTTOM`;
+        }
+        return `rank_${market.toUpperCase()}_${by.toUpperCase()}_${order.toUpperCase()}`;
+    }, [settings]);
+
+    // 중앙 데이터에서 이 위젯의 데이터를 추출
+    const fullData = dashboardData[dataKey] || [];
 
     const defaultColumnWidths = { name: 120, currentPrice: 90, changeRate: 90, volume: 100, tradeValue: 100 };
 
-    // 부모로부터 받는 limit prop만 동기화.
-    useEffect(() => {
-        if (settings.limit !== currentSettings.limit) {
-            setCurrentSettings(prev => ({ ...prev, limit: settings.limit }));
-        }
-    }, [settings.limit]);
-
-    // 데이터 fetch에 영향을 주는 설정값들이 변경될 때만 fetchKey를 재생성
-    const fetchKey = useMemo(() => {
-        const { by, market, order, mode } = currentSettings;
-        return `${mode}-${by}-${market}-${order}`;
-    }, [currentSettings.by, currentSettings.market, currentSettings.order, currentSettings.mode]);
-
-
-    // fetchKey가 변경될 때만 데이터를 다시 가져옴
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const { by, market = 'ALL', order = 'DESC', mode = 'default' } = currentSettings;
-                const fetchLimit = 100; // 항상 최대 100개를 가져옴
-                let url;
-
-                if (mode === 'top-and-bottom') {
-                    url = `/api/market/rank/top-and-bottom?market=${market}&limit=${fetchLimit}`;
-                } else {
-                    url = `/api/market/rank?by=${by}&market=${market}&order=${order}&limit=${fetchLimit}`;
-                }
-                
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const result = await response.json();
-                setFullData(result); // 전체 데이터를 저장
-            } catch (e) {
-                console.error("Fetch data error:", e);
-                setError(e.message);
-                setFullData([]);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchData();
-    }, [fetchKey]);
-
-    const debouncedSave = useCallback(
-        _.debounce((newSettings) => {
-            // limit은 동적으로 계산되므로 DB에 저장하지 않음
-            const { limit, ...settingsToSave } = newSettings;
-            fetch(`/api/widgets/${widgetId}/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settingsToSave),
-            }).catch(error => console.error(`Failed to save settings for widget ${widgetId}:`, error));
-        }, 1000),
-        [widgetId]
-    );
-
-    const handleSettingsChange = useCallback((newSettings) => {
-        setCurrentSettings(newSettings);
-        debouncedSave(newSettings);
-    }, [debouncedSave]);
-
+    // 설정 변경 핸들러들을 부모의 중앙 관리 함수 호출로 변경
     const handleModeChange = useCallback((event) => {
         const newMode = event.target.value;
         let newSettings;
         switch (newMode) {
-            case 'rate_desc': newSettings = { ...currentSettings, by: 'CHANGE_RATE', order: 'DESC', mode: 'default' }; break;
-            case 'rate_asc': newSettings = { ...currentSettings, by: 'CHANGE_RATE', order: 'ASC', mode: 'default' }; break;
-            case 'volume_desc': newSettings = { ...currentSettings, by: 'VOLUME', order: 'DESC', mode: 'default' }; break;
-            case 'trade_value_desc': newSettings = { ...currentSettings, by: 'TRADE_VALUE', order: 'DESC', mode: 'default' }; break;
-            case 'top_and_bottom': newSettings = { ...currentSettings, by: 'CHANGE_RATE', mode: 'top-and-bottom' }; break;
-            default: newSettings = currentSettings;
+            case 'rate_desc': newSettings = { ...settings, by: 'CHANGE_RATE', order: 'DESC', mode: 'default' }; break;
+            case 'rate_asc': newSettings = { ...settings, by: 'CHANGE_RATE', order: 'ASC', mode: 'default' }; break;
+            case 'volume_desc': newSettings = { ...settings, by: 'VOLUME', order: 'DESC', mode: 'default' }; break;
+            case 'trade_value_desc': newSettings = { ...settings, by: 'TRADE_VALUE', order: 'DESC', mode: 'default' }; break;
+            case 'top_and_bottom': newSettings = { ...settings, by: 'CHANGE_RATE', mode: 'top-and-bottom' }; break;
+            default: newSettings = settings;
         }
-        handleSettingsChange(newSettings);
-    }, [currentSettings, handleSettingsChange]);
+        onSettingsChange(widgetId, newSettings);
+    }, [widgetId, settings, onSettingsChange]);
 
     const handleColumnToggle = useCallback((columnKey) => {
-        const currentColumns = currentSettings.visibleColumns || Object.keys(ALL_COLUMNS);
+        const currentColumns = settings.visibleColumns || Object.keys(ALL_COLUMNS);
         const newColumns = currentColumns.includes(columnKey)
             ? currentColumns.filter(c => c !== columnKey)
             : [...currentColumns, columnKey];
-        handleSettingsChange({ ...currentSettings, visibleColumns: newColumns });
-    }, [currentSettings, handleSettingsChange]);
+        onSettingsChange(widgetId, { ...settings, visibleColumns: newColumns });
+    }, [widgetId, settings, onSettingsChange]);
 
     const handleWidthChange = useCallback((columnKey, newWidth) => {
-        const newColumnWidths = { ...(currentSettings.columnWidths || defaultColumnWidths), [columnKey]: newWidth };
-        handleSettingsChange({ ...currentSettings, columnWidths: newColumnWidths });
-    }, [currentSettings, handleSettingsChange, defaultColumnWidths]);
+        const newColumnWidths = { ...(settings.columnWidths || defaultColumnWidths), [columnKey]: newWidth };
+        onSettingsChange(widgetId, { ...settings, columnWidths: newColumnWidths });
+    }, [widgetId, settings, onSettingsChange, defaultColumnWidths]);
 
     const getCurrentMode = () => {
-        if (currentSettings.mode === 'top-and-bottom') return 'top_and_bottom';
-        if (currentSettings.by === 'VOLUME') return 'volume_desc';
-        if (currentSettings.by === 'TRADE_VALUE') return 'trade_value_desc';
-        if (currentSettings.order === 'ASC') return 'rate_asc';
+        if (settings.mode === 'top-and-bottom') return 'top_and_bottom';
+        if (settings.by === 'VOLUME') return 'volume_desc';
+        if (settings.by === 'TRADE_VALUE') return 'trade_value_desc';
+        if (settings.order === 'ASC') return 'rate_asc';
         return 'rate_desc';
     };
 
-    const visibleColumns = currentSettings.visibleColumns || ['currentPrice', 'changeRate'];
-    const columnWidths = currentSettings.columnWidths || defaultColumnWidths;
+    const visibleColumns = settings.visibleColumns || ['currentPrice', 'changeRate'];
+    const columnWidths = settings.columnWidths || defaultColumnWidths;
+    
+    // 화면에 표시할 데이터를 잘라냄
     const displayData = useMemo(() => {
-        return fullData.slice(0, currentSettings.limit || 10);
-    }, [fullData, currentSettings.limit]);
+        return fullData.slice(0, settings.limit || 10);
+    }, [fullData, settings.limit]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -186,7 +140,7 @@ function RankTable({ widgetId, settings, width, height }) {
             
             {showSettings && 
                 <SettingsModal 
-                    settings={currentSettings} 
+                    settings={settings} 
                     onColumnToggle={handleColumnToggle} 
                     onWidthChange={handleWidthChange} 
                     onClose={() => setShowSettings(false)} 
