@@ -11,10 +11,14 @@ import ChartContainer from './ChartContainer';
 import { useResizeObserver } from './useResizeObserver';
 import SymbolChartWidget from './SymbolChartWidget';
 import KrxChartWidget from './KrxChartWidget';
+import TextWidget from './TextWidget';
+import MemoWidget from './MemoWidget';
 import useDashboard from "../contexts/DashboardContext.jsx";
 
 const AddWidgetModal = ({ onAdd, onClose }) => {
     const availableWidgets = [
+        { name: '지표 텍스트', type: 'TextWidget', settings: { dataKey: 'index_KOSPI', title: '코스피' } },
+        { name: '메모장', type: 'MemoWidget', settings: { content: '' } },
         { name: '국내 주식 차트', type: 'KrxChartWidget', settings: { symbol: '005930' } },
         { name: '글로벌 차트 (해외/코인)', type: 'SymbolChartWidget', settings: { symbol: 'AAPL' } },
         { name: '통합 시장 트리맵', type: 'TreemapChart', settings: { marketType: 'ALL' } },
@@ -62,6 +66,10 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                         return <SymbolChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} editingWidgetId={editingWidgetId} onCloseSettings={onCloseSettings} />;
                     case 'KrxChartWidget':
                         return <KrxChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} />;
+                    case 'TextWidget':
+                        return <TextWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} />;
+                    case 'MemoWidget':
+                        return <MemoWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }
@@ -71,6 +79,8 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
 };
 
 const WIDGET_SIZE_LIMITS = {
+    TextWidget: { minW: 1, maxW: 2, minH: 1, maxH: 1 },
+    MemoWidget: { minW: 1, maxW: 4, minH: 1, maxH: 4 },
     KrxChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
     SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
     TreemapChart: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
@@ -249,6 +259,9 @@ function Dashboard() {
         Object.values(widgets).forEach(widget => {
             const settings = widget.props || {};
             switch (widget.type) {
+                case 'TextWidget':
+                    keys.add(settings.dataKey || 'index_KOSPI');
+                    break;
                 case 'TreemapChart':
                     keys.add(`treemap_${(settings.marketType || 'ALL').toUpperCase()}`);
                     break;

@@ -1,6 +1,14 @@
 package stockDashboard.service;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -8,6 +16,9 @@ import java.util.stream.Collectors;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -20,66 +31,50 @@ import stockDashboard.dto.TreemapSectorDto;
 import stockDashboard.repository.KrxRepository;
 
 @Slf4j
-@RequiredArgsConstructor
 @Service
 public class DashboardService {
 	private final KrxRepository krxRepository;
+	private final ObjectMapper objectMapper; // JSON 파싱을 위해 추가
+
+    public DashboardService(KrxRepository krxRepository, ObjectMapper objectMapper) {
+        this.krxRepository = krxRepository;
+        this.objectMapper = objectMapper;
+    }
 	
 	// 스레드 안전한 ConcurrentHashMap을 캐시 저장소로 사용
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
 
-    /**
-     * 애플리케이션 시작 시 즉시 캐시를 초기화합니다.
-     */
     @PostConstruct
     public void initCache() {
         updateMarketDataCache();
     }
 
-    /**
-     * 5분마다 실행되어 DB에서 최신 시장 데이터를 가져와 DTO로 가공 후 캐시에 저장합니다.
-     */
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = 300000) // 5분
     public void updateMarketDataCache() {
         log.info("시장 데이터 캐시 업데이트를 시작합니다...");
         try {
+            // 1. 주식 및 ETF 데이터 조회 및 캐싱
             List<MarketDataDto> liveMarketData = krxRepository.getLiveMarketData();
 
-            // 주식과 ETF 데이터 분리 (marketType의 null 여부로 구분)
-            List<MarketDataDto> stockData = liveMarketData.stream()
-                .filter(d -> d.marketType() != null)
-                .toList();
-            List<MarketDataDto> etfData = liveMarketData.stream()
-                .filter(d -> d.marketType() == null)
-                .toList();
+            List<MarketDataDto> stockData = liveMarketData.stream().filter(d -> d.marketType() != null).toList();
+            List<MarketDataDto> etfData = liveMarketData.stream().filter(d -> d.marketType() == null).toList();
 
-            // 주식 데이터로 KOSPI, KOSDAQ, ALL 트리맵 생성
-            TreemapDto kospiTreemap = transformToTreemapDto(stockData, "KOSPI");
-            TreemapDto kosdaqTreemap = transformToTreemapDto(stockData, "KOSDAQ");
-            TreemapDto allTreemap = transformToTreemapDto(stockData, "ALL");
-            
-            // ETF 데이터로 ETF 트리맵 생성
-            TreemapDto etfTreemap = transformToTreemapDto(etfData, "ETF");
+            cache.put("treemap_KOSPI", transformToTreemapDto(stockData, "KOSPI"));
+            cache.put("treemap_KOSDAQ", transformToTreemapDto(stockData, "KOSDAQ"));
+            cache.put("treemap_ALL", transformToTreemapDto(stockData, "ALL"));
+            cache.put("treemap_ETF", transformToTreemapDto(etfData, "ETF"));
 
-            // 가공된 최종 DTO를 캐시에 저장
-            cache.put("treemap_KOSPI", kospiTreemap);
-            cache.put("treemap_KOSDAQ", kosdaqTreemap);
-            cache.put("treemap_ALL", allTreemap);
-            cache.put("treemap_ETF", etfTreemap); // ETF 트리맵 추가
-
-            // --- 랭킹 데이터 가공 및 캐싱 추가 ---
-            // 주식 시장 순위
             cache.put("rank_KOSPI_MARKET_CAP_DESC", createRankData(stockData, "KOSPI", "MARKET_CAP", "DESC", 100));
             cache.put("rank_KOSDAQ_MARKET_CAP_DESC", createRankData(stockData, "KOSDAQ", "MARKET_CAP", "DESC", 100));
-            
-            // 전체 시장 순위 (주식 + ETF)
             cache.put("rank_ALL_CHANGE_RATE_DESC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "DESC", 100));
             cache.put("rank_ALL_CHANGE_RATE_ASC", createRankData(liveMarketData, "ALL", "CHANGE_RATE", "ASC", 100));
             cache.put("rank_ALL_VOLUME_DESC", createRankData(liveMarketData, "ALL", "VOLUME", "DESC", 100));
             cache.put("rank_ALL_TRADE_VALUE_DESC", createRankData(liveMarketData, "ALL", "TRADE_VALUE", "DESC", 100));
-            
-            List<RankItemDto> topAndBottom = createTopAndBottomRankData(liveMarketData, "ALL", 100);
-            cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", topAndBottom);
+            cache.put("rank_ALL_CHANGE_RATE_TOP_AND_BOTTOM", createTopAndBottomRankData(liveMarketData, "ALL", 100));
+
+            // 2. 코스피/코스닥 지수 정보 조회 및 캐싱
+            fetchIndexData("02").ifPresent(data -> cache.put("index_KOSPI", data));
+            fetchIndexData("03").ifPresent(data -> cache.put("index_KOSDAQ", data));
 
             log.info("시장 데이터 캐시 업데이트 완료.");
         } catch (Exception e) {
@@ -88,17 +83,69 @@ public class DashboardService {
     }
 
     /**
-     * 캐시에서 지정된 시장의 트리맵 데이터를 조회합니다.
+     * KRX에서 코스피 또는 코스닥 지수 정보를 가져옵니다.
+     * @param idxIndMidclssCd "02" for KOSPI, "03" for KOSDAQ
+     * @return 지수 정보 Map (Optional)
      */
+    private java.util.Optional<Map<String, String>> fetchIndexData(String idxIndMidclssCd) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+            String formData = new java.util.StringJoiner("&")
+                    .add("bld=" + URLEncoder.encode("dbms/MDC/STAT/standard/MDCSTAT00101", StandardCharsets.UTF_8))
+                    .add("locale=ko_KR")
+                    .add("idxIndMidclssCd=" + URLEncoder.encode(idxIndMidclssCd, StandardCharsets.UTF_8))
+                    .add("trdDd=" + URLEncoder.encode(today, StandardCharsets.UTF_8))
+                    .add("share=2")
+                    .add("money=3")
+                    .add("csvxls_isNo=false")
+                    .toString();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"))
+                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                    .header("Accept-Language", "ko,en;q=0.9,en-US;q=0.8")
+                    .header("Cache-Control", "no-cache")
+                    .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                    .header("Cookie", "__smVisitorID=gJNV0xI1RRT; JSESSIONID=HayrObIvzAAyborAtb3LdkU2w8WHPHaFkXghDRc1UaHCMdMllBdvyZCgY7wufpOV.bWRjX2RvbWFpbi9tZGNvd2FwMi1tZGNhcHAwMQ==")
+                    .header("Origin", "https://data.krx.co.kr")
+                    .header("Pragma", "no-cache")
+                    .header("Referer", "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201010105")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0")
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("sec-ch-ua", "\"Microsoft Edge\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"")
+                    .header("sec-ch-ua-mobile", "?0")
+                    .header("sec-ch-ua-platform", "\"Windows\"")
+                    .header("sec-fetch-dest", "empty")
+                    .header("sec-fetch-mode", "cors")
+                    .header("sec-fetch-site", "same-origin")
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                Map<String, Object> jsonResponse = objectMapper.readValue(response.body(), new TypeReference<>() {});
+                List<Map<String, String>> output = (List<Map<String, String>>) jsonResponse.get("output");
+                if (output != null && !output.isEmpty()) {
+                    log.info("Successfully fetched index data for code: {}", idxIndMidclssCd);
+                    return java.util.Optional.of(output.get(1));
+                }
+            } else {
+                log.warn("Failed to fetch index data for code: {}. Status: {}", idxIndMidclssCd, response.statusCode());
+            }
+        } catch (IOException | InterruptedException e) {
+            log.error("Error while fetching index data for code: {}", idxIndMidclssCd, e);
+        }
+        return java.util.Optional.empty();
+    }
     public TreemapDto getTreemapData(String marketType) {
         String cacheKey = "treemap_" + marketType.toUpperCase();
         log.info("캐시에서 {} 키로 트리맵 데이터를 조회합니다.", cacheKey);
         return (TreemapDto) cache.get(cacheKey);
     }
 
-    /**
-     * 캐시에서 각종 순위 데이터를 조회합니다.
-     */
     @SuppressWarnings("unchecked")
     public List<RankItemDto> getRankData(String by, String market, String order, int limit) {
         String cacheKey = String.format("rank_%s_%s_%s", market.toUpperCase(), by.toUpperCase(), order.toUpperCase());
@@ -110,9 +157,6 @@ public class DashboardService {
         return cachedData.stream().limit(limit).toList();
     }
     
-    /**
-     * 캐시에서 등락률 상위/하위 혼합 데이터를 조회합니다.
-     */
     @SuppressWarnings("unchecked")
     public List<RankItemDto> getTopAndBottomRankData(String market, int limit) {
         String cacheKey = String.format("rank_%s_CHANGE_RATE_TOP_AND_BOTTOM", market.toUpperCase());
@@ -136,9 +180,6 @@ public class DashboardService {
         return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
     }
 
-    /**
-     * 원본 데이터를 기준으로 각종 순위 DTO 리스트를 생성합니다.
-     */
     private List<RankItemDto> createRankData(List<MarketDataDto> flatData, String market, String by, String order, int limit) {
         List<MarketDataDto> filteredData = flatData.stream()
                 .filter(d -> "ALL".equalsIgnoreCase(market) || market.equalsIgnoreCase(d.marketType()))
@@ -147,7 +188,7 @@ public class DashboardService {
         java.util.Comparator<MarketDataDto> comparator = switch (by.toUpperCase()) {
             case "MARKET_CAP" -> java.util.Comparator.comparing(MarketDataDto::mktcap, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
             case "VOLUME" -> java.util.Comparator.comparing(MarketDataDto::tradeVolume, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
-            case "TRADE_VALUE" -> java.util.Comparator.comparing(MarketDataDto::tradeValue, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())); // 거래대금 정렬 추가
+            case "TRADE_VALUE" -> java.util.Comparator.comparing(MarketDataDto::tradeValue, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
             case "CHANGE_RATE" -> "asc".equalsIgnoreCase(order)
                     ? java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
                     : java.util.Comparator.comparing(MarketDataDto::fluc_rate, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
@@ -160,12 +201,12 @@ public class DashboardService {
                 .limit(limit)
                 .map(d -> new RankItemDto(
                         rank.getAndIncrement(),
-                        d.isuSrtCd(), // 종목코드 추가
+                        d.isuSrtCd(),
                         d.nodeName(),
                         d.currentPrice() != null ? d.currentPrice() : 0L,
                         d.fluc_rate() != null ? d.fluc_rate() : 0.0,
                         d.tradeVolume() != null ? d.tradeVolume() : 0L,
-                        d.tradeValue() != null ? d.tradeValue() : 0L, // 거래대금 추가
+                        d.tradeValue() != null ? d.tradeValue() : 0L,
                         d.mktcap() != null ? d.mktcap() : 0L
                 ))
                 .toList();
@@ -177,20 +218,11 @@ public class DashboardService {
         return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
     }
     
-    /**
-     * 프론트엔드의 transformData 로직을 백엔드에서 그대로 수행합니다.
-     * @param flatData DB에서 가져온 원본 데이터 리스트
-     * @param marketName 가공할 시장 이름 ("KOSPI" 또는 "KOSDAQ")
-     * @return D3.js가 사용하는 계층 구조와 동일한 TreemapDto
-     */
     private TreemapDto transformToTreemapDto(List<MarketDataDto> flatData, String marketName) {
-        // 1. 해당 시장 데이터만 필터링
         List<MarketDataDto> marketSpecificData;
         if ("ETF".equalsIgnoreCase(marketName) || "ALL".equalsIgnoreCase(marketName)) {
-            // ETF 또는 ALL의 경우, 이미 필터링된 데이터(또는 전체)를 그대로 사용
             marketSpecificData = flatData;
         } else {
-            // KOSPI, KOSDAQ의 경우 marketType으로 필터링
             marketSpecificData = flatData.stream()
                 .filter(d -> marketName.equalsIgnoreCase(d.marketType()))
                 .toList();
@@ -200,20 +232,17 @@ public class DashboardService {
             return new TreemapDto(marketName, List.of());
         }
 
-        // 2. 섹터별로 그룹화
         Map<String, List<MarketDataDto>> groupedBySector = marketSpecificData.stream()
                 .collect(Collectors.groupingBy(d -> d.sectorName() != null ? d.sectorName() : "기타 섹터"));
 
-        // 3. 각 섹터를 TreemapSectorDto로 변환
         List<TreemapSectorDto> sectorChildren = groupedBySector.entrySet().stream()
                 .map(entry -> {
                     String sectorName = entry.getKey();
                     List<MarketDataDto> items = entry.getValue();
 
-                    // 4. 섹터 내의 각 종목을 TreemapNodeDto로 변환
                     List<TreemapNodeDto> stockChildren = items.stream()
                             .map(item -> new TreemapNodeDto(
-                                    item.isuSrtCd(), // 종목코드 추가
+                                    item.isuSrtCd(),
                                     item.nodeName() != null ? item.nodeName() : "이름없음",
                                     item.mktcap() != null ? item.mktcap() : 0L,
                                     item.fluc_rate() != null ? item.fluc_rate() : 0.0,
@@ -223,14 +252,13 @@ public class DashboardService {
                     return new TreemapSectorDto(sectorName, stockChildren);
                 }).toList();
 
-        // "ALL"일 경우 최상위 이름을 "통합 시장"으로 설정
         String rootName = "ALL".equalsIgnoreCase(marketName) ? "통합 시장" : marketName;
+        if ("ETF".equalsIgnoreCase(marketName)) {
+            rootName = "ETF";
+        }
         return new TreemapDto(rootName, sectorChildren);
     }
 
-    /**
-     * 요청된 키 목록에 해당하는 캐시 데이터를 조회합니다.
-     */
     public Map<String, Object> getDynamicData(List<String> dataKeys) {
         if (dataKeys == null || dataKeys.isEmpty()) {
             return Map.of();
