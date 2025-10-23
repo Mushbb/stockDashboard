@@ -85,11 +85,11 @@ function TextWidget({ widgetId, settings, onSettingsChange, isEditMode }) {
                         코스닥
                     </button>
                 </div>
-            <div style={{ fontSize: '1.2em', color: '#888', marginBottom: '10px', position: 'relative', zIndex: 11 }}>{title}</div>
-            <div style={{ fontSize: '3em', fontWeight: 'bold', position: 'relative', zIndex: 11 }}>{formatNumber(value)}</div>
-            <div style={{ fontSize: '1.5em', marginTop: '10px', position: 'relative', zIndex: 11 }}>
+            <div style={{ fontSize: 'clamp(0.8rem, 2.5vw, 1.2em)', color: '#888', marginBottom: '10px', position: 'relative', zIndex: 11 }}>{title}</div>
+            <div style={{ fontSize: 'clamp(1.5rem, 6vw, 3em)', fontWeight: 'bold', position: 'relative', zIndex: 11 }}>{formatNumber(value)}</div>
+            <div style={{ fontSize: 'clamp(1rem, 2.5vw, 1.2em)', marginTop: '10px', position: 'relative', zIndex: 11, whiteSpace: 'nowrap' }}>
                 <span>{sign} {formatNumber(change)}</span>
-                <span style={{ marginLeft: '15px', position: 'relative', zIndex: 11 }}>({changeRate}%)</span>
+                <span style={{ marginLeft: '5px', position: 'relative', zIndex: 11 }}>({changeRate}%)</span>
             </div>
         </div>
     );

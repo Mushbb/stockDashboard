@@ -318,7 +318,7 @@ function Dashboard() {
 
     return (
         <DataProvider requiredDataKeys={requiredDataKeys}>
-            <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
+            <div style={{ fontFamily: 'sans-serif', padding: '5px', backgroundColor: '#f4f7f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', height: '50px', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleTitleChange}>
                         <h1 style={{ 

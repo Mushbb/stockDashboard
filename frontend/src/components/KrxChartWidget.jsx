@@ -132,7 +132,17 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(255, 255, 255, 0.8)', padding: '5px', borderRadius: '5px' }}>
+            <div style={{ 
+                position: 'absolute', 
+                top: 10, 
+                left: 10, 
+                zIndex: 10, 
+                background: 'rgba(255, 255, 255, 0.8)', 
+                padding: '0px', 
+                borderRadius: '5px',
+                width: `${width - 20}px`, // Use widget's width, minus padding/margins
+                boxSizing: 'border-box'
+            }}>
                 {isSearching ? (
                     <div ref={searchContainerRef}>
                         <input
@@ -158,8 +168,8 @@ const KrxChartWidget = ({ widgetId, settings, width, height, onSettingsChange })
                     </div>
                 ) : (
                     <div onClick={() => setIsSearching(true)} style={{ cursor: 'pointer' }}>
-                        <h3 style={{ margin: 0, fontSize: '18px', color: '#333' }}>{stockName || '종목 정보 없음'}</h3>
-                        <span style={{ fontSize: '14px', color: '#666' }}>{symbol}</span>
+                        <h3 style={{ margin: 0, fontSize: 'clamp(1rem, 4vw, 1.5rem)', color: '#333' }}>{stockName || '종목 정보 없음'}</h3>
+                        <span style={{ fontSize: 'clamp(0.8rem, 3vw, 1.2rem)', color: '#666' }}>{symbol}</span>
                     </div>
                 )}
             </div>
