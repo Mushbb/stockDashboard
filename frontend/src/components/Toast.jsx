@@ -17,7 +17,6 @@ const Toast = () => {
 
     const toastStyle = {
         position: 'fixed',
-        top: '20px',
         left: '50%',
         transform: 'translateX(-50%)',
         padding: '10px 20px',

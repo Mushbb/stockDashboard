@@ -235,4 +235,46 @@ public class KrxRepository {
 			rs.getString("name")
 		), params);
 	}
+
+
+	public List<MarketDataDto> findLatestMarketDataBySymbols(List<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String inSql = String.join(",", java.util.Collections.nCopies(symbols.size(), "?"));
+
+        String sql = String.format("""
+            WITH RankedMetrics AS (
+                SELECT
+                    m.*,
+                    ROW_NUMBER() OVER(PARTITION BY m.ISU_SRT_CD ORDER BY m.collected_at DESC) as rn
+                FROM
+                    daily_metrics m
+                WHERE
+                    m.ISU_SRT_CD IN (%s)
+                    AND m.metric_date = (SELECT MAX(metric_date) FROM daily_metrics WHERE ISU_SRT_CD IN (%s))
+            )
+            SELECT
+                rm.ISU_SRT_CD, n_hist.value AS node_name, s_hist.value AS sector_name, m_hist.value AS market_type,
+                rm.metric_date, rm.collected_at, rm.MKTCAP, rm.FLUC_RT,
+                rm.TDD_CLSPRC, rm.TDD_OPNPRC, rm.TDD_HGPRC, rm.TDD_LWPRC, rm.ACC_TRDVOL, rm.ACC_TRDVAL
+            FROM
+                RankedMetrics rm
+            LEFT JOIN
+                stock_history n_hist ON rm.ISU_SRT_CD = n_hist.stock_id AND n_hist.history_type = 'NAME' AND n_hist.end_date IS NULL
+            LEFT JOIN
+                stock_history s_hist ON rm.ISU_SRT_CD = s_hist.stock_id AND s_hist.history_type = 'SECTOR' AND s_hist.end_date IS NULL
+            LEFT JOIN
+                stock_history m_hist ON rm.ISU_SRT_CD = m_hist.stock_id AND m_hist.history_type = 'MARKET' AND m_hist.end_date IS NULL
+            WHERE
+                rm.rn = 1
+            """, inSql, inSql);
+
+        List<Object> params = new ArrayList<>(symbols);
+        params.addAll(symbols);
+
+        List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, params.toArray());
+        return mapResultsToMarketDataDto(results);
+    }
 }

@@ -1,6 +1,7 @@
 package stockDashboard.controller;
 
 import lombok.RequiredArgsConstructor;
+import stockDashboard.dto.MarketDataDto;
 import stockDashboard.dto.StockSearchDto;
 import stockDashboard.service.StockService;
 import org.springframework.http.ResponseEntity;
@@ -25,5 +26,13 @@ public class StockController {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(stockService.searchStocks(query));
+    }
+
+    @GetMapping("/quotes")
+    public ResponseEntity<List<MarketDataDto>> getQuotes(@RequestParam("symbols") List<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(stockService.getLatestMarketDataForSymbols(symbols));
     }
 }

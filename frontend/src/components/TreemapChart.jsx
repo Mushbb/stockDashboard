@@ -181,8 +181,8 @@ function TreemapChart({ widgetId, settings, width, height, onSettingsChange }) {
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 5px', height: '40px', flexShrink: 0 }}>
-                <h3 style={{ margin: '0', fontSize: '1em', color: '#555', fontWeight: 'normal', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 5px', minHeight: '50px', flexShrink: 0 }}>
+                <h3 style={{ margin: '0 10px 0 0', fontSize: '0.9em', color: '#555', fontWeight: 'normal', flex: 1 }}>
                     {view && view.ancestors().reverse().map(d => d.data.name).join(' > ')}
                 </h3>
                 <div>

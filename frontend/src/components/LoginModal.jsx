@@ -33,8 +33,20 @@ export const LoginModal = ({ onClose }) => {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-            <div style={{ background: 'white', padding: '25px', borderRadius: '8px', color: '#333' }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }} onClick={onClose}>
+            <div style={{
+                position: 'absolute',
+                top: '60px', // Changed to fixed pixel value
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'white', 
+                padding: '20px', 
+                borderRadius: '8px', 
+                color: '#333',
+                width: '90%',
+                maxWidth: '400px',
+                boxSizing: 'border-box'
+            }} onClick={e => e.stopPropagation()}>
                 <h2>{isRegister ? '회원가입' : '로그인'}</h2>
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: '15px' }}>

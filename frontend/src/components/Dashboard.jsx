@@ -13,6 +13,7 @@ import SymbolChartWidget from './SymbolChartWidget';
 import KrxChartWidget from './KrxChartWidget';
 import TextWidget from './TextWidget';
 import MemoWidget from './MemoWidget';
+import WatchlistWidget from './WatchlistWidget';
 import useDashboard from "../contexts/DashboardContext.jsx";
 
 const AddWidgetModal = ({ onAdd, onClose }) => {
@@ -26,6 +27,7 @@ const AddWidgetModal = ({ onAdd, onClose }) => {
         { name: '하락률 순위', type: 'RankTable', settings: { by: 'CHANGE_RATE', order: 'ASC', visibleColumns: ['currentPrice', 'changeRate'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
         { name: '거래량 순위', type: 'RankTable', settings: { by: 'VOLUME', order: 'DESC', visibleColumns: ['currentPrice', 'volume'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
         { name: '거래대금 순위', type: 'RankTable', settings: { by: 'TRADE_VALUE', order: 'DESC', visibleColumns: ['currentPrice', 'tradeValue'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
+        { name: '관심종목', type: 'WatchlistWidget', settings: { visibleColumns: ['currentPrice', 'changeRate'], columnWidths: { name: 80, currentPrice: 80, changeRate: 80, volume: 80, tradeValue: 80 } } },
     ];
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
@@ -46,7 +48,7 @@ const AddWidgetModal = ({ onAdd, onClose }) => {
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCloseSettings }) => {
+const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCloseSettings, isEditMode }) => {
     const [ref, { width, height }] = useResizeObserver();
     const rankTableLimit = (() => {
         if (type !== 'RankTable' || height <= 70) return 10;
@@ -62,12 +64,14 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                         return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-40} onSettingsChange={onSettingsChange} />;
                     case 'RankTable':
                         return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} onSettingsChange={onSettingsChange} />;
+                    case 'WatchlistWidget':
+                        return <WatchlistWidget widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} onSettingsChange={onSettingsChange} />;
                     case 'SymbolChartWidget':
                         return <SymbolChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} editingWidgetId={editingWidgetId} onCloseSettings={onCloseSettings} />;
                     case 'KrxChartWidget':
                         return <KrxChartWidget widgetId={widgetId} settings={props} width={width} height={height} onSettingsChange={onSettingsChange} />;
                     case 'TextWidget':
-                        return <TextWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} />;
+                        return <TextWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} isEditMode={isEditMode} />;
                     case 'MemoWidget':
                         return <MemoWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} />;
                     default:
@@ -85,6 +89,7 @@ const WIDGET_SIZE_LIMITS = {
     SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
     TreemapChart: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
     RankTable: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
+    WatchlistWidget: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
 };
 
 function Dashboard() {
@@ -99,6 +104,14 @@ function Dashboard() {
     const [isLoginModalOpen, setLoginModalOpen] = useState(false);
     const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
     const [editingWidgetId, setEditingWidgetId] = useState(null);
+    const [dashboardTitle, setDashboardTitle] = useState('');
+
+    useEffect(() => {
+        if (user) {
+            const savedTitle = localStorage.getItem('dashboardTitle');
+            setDashboardTitle(savedTitle || `${user.username}님의 대시보드`);
+        }
+    }, [user]);
 
     useEffect(() => {
         if (user) {
@@ -282,6 +295,14 @@ function Dashboard() {
         return Array.from(keys);
     }, [widgets]);
 
+    const handleTitleChange = () => {
+        const newTitle = prompt("새로운 대시보드 제목을 입력하세요:", dashboardTitle);
+        if (newTitle && newTitle !== dashboardTitle) {
+            setDashboardTitle(newTitle);
+            localStorage.setItem('dashboardTitle', newTitle);
+        }
+    };
+
 
     if (loading && !user) return <div>Loading...</div>;
 
@@ -298,17 +319,41 @@ function Dashboard() {
     return (
         <DataProvider requiredDataKeys={requiredDataKeys}>
             <div style={{ fontFamily: 'sans-serif', padding: '20px', backgroundColor: '#f4f7f6' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <h1 style={{ margin: 0 }}>{user.username}님의 대시보드</h1>
-                        <span style={{ marginLeft: '20px', fontSize: '12px', color: '#888' }}>
-                            [Debug] 현재 선택된 종목: {JSON.stringify(selectedAsset)}
-                        </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', height: '50px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleTitleChange}>
+                        <h1 style={{ 
+                            margin: 0, 
+                            fontSize: 'clamp(1.2rem, 5vw, 1.8rem)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }} title="제목 변경">{dashboardTitle}</h1>
                     </div>
-                    <div>
-                        <button onClick={() => setIsEditMode(!isEditMode)}>{isEditMode ? '✅ 완료' : '✏️ 편집'}</button>
-                        {isEditMode && <button onClick={() => setAddModalOpen(true)} style={{ marginLeft: '10px' }}>+ 위젯 추가</button>}
-                        <button onClick={logout} style={{ marginLeft: '10px' }}>로그아웃</button>
+                    <div style={{ display: 'flex', marginLeft: '10px' }}>
+                        <button 
+                            onClick={() => setIsEditMode(!isEditMode)} 
+                            style={{ 
+                                padding: '0 15px', 
+                                border: '1px solid #ccc', 
+                                background: isEditMode ? '#e0e0e0' : 'white', 
+                                cursor: 'pointer' 
+                            }}
+                        >
+                            {isEditMode ? '✅' : '✏️'}
+                        </button>
+                        {isEditMode && 
+                            <button 
+                                onClick={() => setAddModalOpen(true)} 
+                                style={{ padding: '0 15px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
+                            >
+                                +
+                            </button>}
+                        <button 
+                            onClick={logout} 
+                            style={{ padding: '0 15px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
+                        >
+                            로그아웃
+                        </button>
                     </div>
                 </div>
 
@@ -344,6 +389,7 @@ function Dashboard() {
                                     onSettingsChange={handleWidgetSettingsChange}
                                     editingWidgetId={editingWidgetId}
                                     onCloseSettings={handleCloseSettings}
+                                    isEditMode={isEditMode}
                                 />
                             </ChartContainer>
                         </div>
