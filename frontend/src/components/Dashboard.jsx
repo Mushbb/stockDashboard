@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import _ from 'lodash';
 import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext';
-import { DataProvider } from '../contexts/DataProvider'; // DataProvider 임포트
+import { DataProvider } from '../contexts/DataProvider';
 import { LoginModal } from './LoginModal';
 import TreemapChart from './TreemapChart';
 import RankTable from './RankTable';
@@ -14,7 +13,7 @@ import KrxChartWidget from './KrxChartWidget';
 import TextWidget from './TextWidget';
 import MemoWidget from './MemoWidget';
 import WatchlistWidget from './WatchlistWidget';
-import useDashboard from "../contexts/DashboardContext.jsx";
+import { useDashboard } from "../contexts/DashboardContext.jsx";
 
 const AddWidgetModal = ({ onAdd, onClose }) => {
     const availableWidgets = [
@@ -82,147 +81,55 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
     );
 };
 
-const WIDGET_SIZE_LIMITS = {
-    TextWidget: { minW: 1, maxW: 2, minH: 1, maxH: 1 },
-    MemoWidget: { minW: 1, maxW: 4, minH: 1, maxH: 4 },
-    KrxChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
-    SymbolChartWidget: { minW: 2, maxW: 4, minH: 2, maxH: 2 },
-    TreemapChart: { minW: 2, maxW: 4, minH: 2, maxH: 4 },
-    RankTable: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
-    WatchlistWidget: { minW: 1, maxW: 4, minH: 2, maxH: 4 },
-};
-
 function Dashboard() {
     const { user, logout } = useAuth();
-    const { showToast } = useToast();
-    const { selectedAsset } = useDashboard();
-    const [widgets, setWidgets] = useState({});
-    const [layouts, setLayouts] = useState({ lg: [], md: [], sm: [] });
-    const [loading, setLoading] = useState(true);
+    const {
+        widgets,
+        layouts,
+        loading,
+        onLayoutChange,
+        addWidget,
+        removeWidget,
+        updateWidgetSettings,
+        renameWidget, // renameWidget 가져오기
+        WIDGET_SIZE_LIMITS
+    } = useDashboard();
+
     const [isEditMode, setIsEditMode] = useState(false);
     const [isAddModalOpen, setAddModalOpen] = useState(false);
     const [isLoginModalOpen, setLoginModalOpen] = useState(false);
-    const [currentBreakpoint, setCurrentBreakpoint] = useState('lg');
     const [editingWidgetId, setEditingWidgetId] = useState(null);
     const [dashboardTitle, setDashboardTitle] = useState('');
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
     useEffect(() => {
         if (user) {
             const savedTitle = localStorage.getItem('dashboardTitle');
             setDashboardTitle(savedTitle || `${user.username}님의 대시보드`);
-        }
-    }, [user]);
-
-    useEffect(() => {
-        if (user) {
-            setLoading(true);
-            fetch('/api/widgets')
-                .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to fetch widgets')))
-                .then(data => {
-                    if (data && data.length > 0) {
-                        const newWidgets = {};
-                        const newLayouts = { lg: [], md: [], sm: [] };
-                        data.forEach(widget => {
-                            const widgetId = widget.widgetId.toString();
-                            newWidgets[widgetId] = { title: widget.widgetName, type: widget.widgetType, props: JSON.parse(widget.widgetSettings) };
-                            const layoutInfo = JSON.parse(widget.layoutInfo);
-                            const limits = WIDGET_SIZE_LIMITS[widget.widgetType] || {};
-                            Object.keys(layoutInfo).forEach(bp => {
-                                if (newLayouts[bp] && layoutInfo[bp]) {
-                                    newLayouts[bp].push({ ...layoutInfo[bp], i: widgetId, ...limits });
-                                }
-                            });
-                        });
-                        setWidgets(newWidgets);
-                        setLayouts(newLayouts);
-                    }
-                })
-                .catch(error => {
-                    console.error(error);
-                    if (error.message.includes('401')) setLoginModalOpen(true);
-                })
-                .finally(() => setLoading(false));
         } else {
-            setWidgets({});
-            setLayouts({ lg: [], md: [], sm: [] });
-            setLoading(false);
+            setDashboardTitle('샘플 대시보드');
         }
     }, [user]);
-
-    const changedLayoutsRef = useRef({});
-    const debouncedSaveLayout = useCallback(_.debounce(() => {
-        const layoutsToSave = { ...changedLayoutsRef.current };
-        if (Object.keys(layoutsToSave).length === 0) return;
-        Object.keys(layoutsToSave).forEach(widgetId => {
-            const layoutInfo = layoutsToSave[widgetId];
-            fetch(`/api/widgets/${widgetId}/layout`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(layoutInfo) })
-                .catch(error => console.error(`Failed to save layout for widget ${widgetId}:`, error));
-        });
-        changedLayoutsRef.current = {};
-    }, 2000), []);
-
-    const onLayoutChange = (layout, allLayouts) => {
-        setLayouts(allLayouts);
-        const oldLayout = layouts[currentBreakpoint] || [];
-        const changedItems = layout.filter(newItem => {
-            const oldItem = oldLayout.find(item => item.i === newItem.i);
-            return oldItem && !_.isEqual(oldItem, newItem);
-        });
-        if (changedItems.length > 0) {
-            changedItems.forEach(item => {
-                const widgetId = item.i;
-                changedLayoutsRef.current[widgetId] = { lg: allLayouts.lg.find(l => l.i === widgetId), md: allLayouts.md.find(l => l.i === widgetId), sm: allLayouts.sm.find(l => l.i === widgetId) };
-            });
-            debouncedSaveLayout();
-        }
-    };
-
-    const onBreakpointChange = (newBreakpoint) => setCurrentBreakpoint(newBreakpoint);
 
     const handleAddWidget = (widgetTemplate) => {
         setAddModalOpen(false);
-        const limits = WIDGET_SIZE_LIMITS[widgetTemplate.type] || {};
-        const newLayoutItem = { i: 'new', x: 0, y: 0, w: 2, h: 2, ...limits };
-        const defaultLayoutInfo = { lg: newLayoutItem, md: newLayoutItem, sm: newLayoutItem };
-        const newWidgetData = { widgetName: widgetTemplate.name, widgetType: widgetTemplate.type, layoutInfo: JSON.stringify(defaultLayoutInfo), widgetSettings: JSON.stringify(widgetTemplate.settings) };
-        fetch('/api/widgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newWidgetData) })
-            .then(() => { window.location.reload(); })
-            .catch(err => console.error('Failed to add widget:', err));
+        addWidget(widgetTemplate);
     };
-
-    const handleRenameWidget = useCallback((event) => {
-        const widgetId = event.currentTarget.dataset.id;
-        const newName = prompt("새로운 위젯 이름을 입력하세요:", widgets[widgetId].title);
-        if (newName && newName !== widgets[widgetId].title) {
-            const originalWidgets = widgets;
-            setWidgets(prev => ({ ...prev, [widgetId]: { ...prev[widgetId], title: newName } }));
-            fetch(`/api/widgets/${widgetId}/name`, { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: newName })
-                .catch(err => {
-                    console.error('Failed to rename widget:', err);
-                    setWidgets(originalWidgets);
-                });
-        }
-    }, [widgets]);
 
     const handleDeleteWidget = useCallback((event) => {
         const widgetId = event.currentTarget.dataset.id;
-        if (window.confirm(`'${widgets[widgetId].title}' 위젯을 삭제하시겠습니까?`)) {
-            const originalWidgets = widgets;
-            const originalLayouts = layouts;
-            const newWidgets = { ...widgets };
-            delete newWidgets[widgetId];
-            const newLayouts = { ...layouts };
-            Object.keys(newLayouts).forEach(bp => { newLayouts[bp] = newLayouts[bp].filter(l => l.i !== widgetId); });
-            setWidgets(newWidgets);
-            setLayouts(newLayouts);
-            fetch(`/api/widgets/${widgetId}`, { method: 'DELETE' })
-                .catch(err => {
-                    console.error('Failed to delete widget:', err);
-                    setWidgets(originalWidgets);
-                    setLayouts(originalLayouts);
-                });
+        removeWidget(widgetId);
+    }, [removeWidget]);
+
+    const handleRenameWidget = useCallback((event) => {
+        const widgetId = event.currentTarget.dataset.id;
+        const currentName = widgets[widgetId]?.title || '';
+        const newName = prompt("새로운 위젯 이름을 입력하세요:", currentName);
+
+        if (newName && newName !== currentName) {
+            renameWidget(widgetId, newName);
         }
-    }, [widgets, layouts]);
+    }, [widgets, renameWidget]);
 
     const handleSettings = useCallback((event) => {
         const widgetId = event.currentTarget.dataset.id;
@@ -233,40 +140,10 @@ function Dashboard() {
         setEditingWidgetId(null);
     }, []);
 
-    // 중앙화된 위젯 설정 저장 로직
-    const debouncedSave = useRef(
-        _.debounce((widgetId, settingsToSave) => {
-            fetch(`/api/widgets/${widgetId}/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settingsToSave),
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                showToast('설정이 저장되었습니다.', 'info');
-            })
-            .catch(err => {
-                console.error(`Failed to save widget settings for ${widgetId}:`, err);
-                showToast('설정 저장에 실패했습니다.', 'error');
-            });
-        }, 1000)
-    ).current;
-
     const handleWidgetSettingsChange = useCallback((widgetId, newSettings) => {
-        // UI 즉시 반응을 위해 위젯 상태를 먼저 업데이트
-        setWidgets(prev => ({
-            ...prev,
-            [widgetId]: { ...prev[widgetId], props: newSettings }
-        }));
-        
-        // 실제 저장은 debounce를 통해 실행
-        const { limit, ...settingsToSave } = newSettings;
-        debouncedSave(widgetId, settingsToSave);
-    }, [debouncedSave]);
+        updateWidgetSettings(widgetId, newSettings);
+    }, [updateWidgetSettings]);
 
-    // 현재 활성화된 위젯을 기반으로 DataProvider가 요청할 데이터 키 목록을 생성
     const requiredDataKeys = useMemo(() => {
         const keys = new Set();
         Object.values(widgets).forEach(widget => {
@@ -296,6 +173,7 @@ function Dashboard() {
     }, [widgets]);
 
     const handleTitleChange = () => {
+        if (!user) return;
         const newTitle = prompt("새로운 대시보드 제목을 입력하세요:", dashboardTitle);
         if (newTitle && newTitle !== dashboardTitle) {
             setDashboardTitle(newTitle);
@@ -303,57 +181,58 @@ function Dashboard() {
         }
     };
 
-
-    if (loading && !user) return <div>Loading...</div>;
-
-    if (!user) {
-        return (
-            <div style={{ textAlign: 'center', marginTop: '50px' }}>
-                <h1>로그인이 필요합니다.</h1>
-                <button onClick={() => setLoginModalOpen(true)}>로그인 / 회원가입</button>
-                {isLoginModalOpen && <LoginModal onClose={() => setLoginModalOpen(false)} />}
-            </div>
-        );
-    }
+    if (loading) return <div>Loading...</div>;
 
     return (
         <DataProvider requiredDataKeys={requiredDataKeys}>
+            {isLoginModalOpen && <LoginModal onClose={() => setLoginModalOpen(false)} />}
+
             <div style={{ fontFamily: 'sans-serif', padding: '5px', backgroundColor: '#f4f7f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', height: '50px', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleTitleChange}>
-                        <h1 style={{ 
-                            margin: 0, 
+                    <div style={{ display: 'flex', alignItems: 'center', cursor: user ? 'pointer' : 'default' }} onClick={handleTitleChange}>
+                        <h1 style={{
+                            margin: 0,
                             fontSize: 'clamp(1.2rem, 5vw, 1.8rem)',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis'
-                        }} title="제목 변경">{dashboardTitle}</h1>
+                        }} title={user ? "제목 변경" : ""}>{dashboardTitle}</h1>
                     </div>
-                    <div style={{ display: 'flex', marginLeft: '10px' }}>
-                        <button 
-                            onClick={() => setIsEditMode(!isEditMode)} 
-                            style={{ 
-                                padding: '0 15px', 
-                                border: '1px solid #ccc', 
-                                background: isEditMode ? '#e0e0e0' : 'white', 
-                                cursor: 'pointer' 
+                    <div style={{ display: 'flex', alignItems: 'center', marginLeft: '10px' }}>
+                        {!user && <span className="demo-message">체험용 대시보드입니다. 변경사항은 저장되지 않습니다.</span>}
+                        <button
+                            onClick={() => setIsEditMode(!isEditMode)}
+                            style={{
+                                padding: '0 15px', height: '40px',
+                                border: '1px solid #ccc',
+                                background: isEditMode ? '#e0e0e0' : 'white',
+                                cursor: 'pointer'
                             }}
                         >
                             {isEditMode ? '✅' : '✏️'}
                         </button>
-                        {isEditMode && 
-                            <button 
-                                onClick={() => setAddModalOpen(true)} 
-                                style={{ padding: '0 15px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
+                        {isEditMode &&
+                            <button
+                                onClick={() => setAddModalOpen(true)}
+                                style={{ padding: '0 15px', height: '40px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
                             >
                                 +
                             </button>}
-                        <button 
-                            onClick={logout} 
-                            style={{ padding: '0 15px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
-                        >
-                            로그아웃
-                        </button>
+                        {user ? (
+                            <button
+                                onClick={logout}
+                                style={{ padding: '0 15px', height: '40px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
+                            >
+                                로그아웃
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => setLoginModalOpen(true)}
+                                style={{ padding: '0 15px', height: '40px', border: '1px solid #ccc', borderLeft: 'none', background: 'white', cursor: 'pointer' }}
+                            >
+                                로그인
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -369,23 +248,22 @@ function Dashboard() {
                     isResizable={isEditMode}
                     draggableHandle=".widget-title"
                     onLayoutChange={onLayoutChange}
-                    onBreakpointChange={onBreakpointChange}
                     style={{ transform: 'scale(1)' }}
                 >
                     {Object.keys(widgets).map(key => (
-                        <div key={key}>
-                            <ChartContainer 
+                        <div key={key} data-grid={layouts.lg.find(l => l.i === key)} style={{...WIDGET_SIZE_LIMITS[widgets[key].type]}}>
+                            <ChartContainer
                                 widgetId={key}
                                 title={widgets[key].title}
                                 isEditMode={isEditMode}
-                                onRename={handleRenameWidget}
+                                onRename={user ? handleRenameWidget : null} // 로그인 시에만 이름 변경 가능
                                 onDelete={handleDeleteWidget}
                                 onSettings={widgets[key].type === 'SymbolChartWidget' ? handleSettings : null}
                             >
-                                <Widget 
-                                    widgetId={key} 
-                                    type={widgets[key].type} 
-                                    props={widgets[key].props} 
+                                <Widget
+                                    widgetId={key}
+                                    type={widgets[key].type}
+                                    props={widgets[key].props}
                                     onSettingsChange={handleWidgetSettingsChange}
                                     editingWidgetId={editingWidgetId}
                                     onCloseSettings={handleCloseSettings}

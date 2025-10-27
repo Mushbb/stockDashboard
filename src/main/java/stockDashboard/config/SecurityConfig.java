@@ -34,6 +34,10 @@ public class SecurityConfig {
                 .requestMatchers("/", "/index.html", "/assets/**", "/*.js", "/*.css", "/*.ico", "/vite.svg").permitAll()
                 // 회원가입 및 로그인 API는 누구나 접근 가능
                 .requestMatchers("/api/users/register", "/api/login").permitAll()
+                // 동적 데이터 조회 API는 누구나 접근 가능
+                .requestMatchers(HttpMethod.POST, "/api/dashboard/dynamic-data").permitAll()
+                // 차트 및 종목 검색 API는 누구나 접근 가능
+                .requestMatchers(HttpMethod.GET, "/api/charts/krx/history", "/api/stocks/search").permitAll()
                 // 그 외 모든 /api/** 요청은 인증 필요
                 .requestMatchers("/api/**").authenticated()
                 // 나머지 요청은 일단 허용 (필요에 따라 authenticated()로 변경 가능)

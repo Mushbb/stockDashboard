@@ -4,6 +4,7 @@ import { DashboardProvider } from './contexts/DashboardContext';
 import { ToastProvider } from './contexts/ToastContext'; // ToastProvider 임포트
 import Dashboard from './components/Dashboard';
 import Toast from './components/Toast'; // Toast 컴포넌트 임포트
+import './App.css'; // App.css 파일 임포트 추가
 
 // Grid Layout CSS
 import 'react-grid-layout/css/styles.css';
