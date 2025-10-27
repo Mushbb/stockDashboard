@@ -60,7 +60,7 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                 if (width === 0 || height === 0) return null;
                 switch (type) {
                     case 'TreemapChart':
-                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-40} onSettingsChange={onSettingsChange} />;
+                        return <TreemapChart widgetId={widgetId} settings={props} width={width} height={height-50} onSettingsChange={onSettingsChange} />;
                     case 'RankTable':
                         return <RankTable widgetId={widgetId} settings={{...props, limit: rankTableLimit}} width={width} height={height} onSettingsChange={onSettingsChange} />;
                     case 'WatchlistWidget':
