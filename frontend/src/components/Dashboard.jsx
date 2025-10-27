@@ -73,7 +73,7 @@ const Widget = ({ widgetId, type, props, onSettingsChange, editingWidgetId, onCl
                     case 'TextWidget':
                         return <TextWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} isEditMode={isEditMode} />;
                     case 'MemoWidget':
-                        return <MemoWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} />;
+                        return <MemoWidget widgetId={widgetId} settings={props} onSettingsChange={onSettingsChange} isEditMode={isEditMode} />;
                     default:
                         return <div>Unknown widget type</div>;
                 }
