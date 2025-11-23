@@ -1,5 +1,7 @@
 # 오늘의 국장: 개인화 주식 대시보드 (Personalized Stock Dashboard)
 
+[![Documentation](https://img.shields.io/badge/📖-Documentation-blue)](https://docs.google.com/document/d/140_O0eGaRDloFZE8FHh0flYccWmB1o30j9PUTBHrmG0/edit?tab=t.0) [![Live Demo](https://img.shields.io/badge/🚀-Live%20Demo-brightgreen)](https://stockdashboard-e8gtedayc5bdgkch.koreacentral-01.azurewebsites.net/)
+
 '오늘의 국장'은 국내 주식 시장에 관심 있는 투자자들을 위한 개인화 대시보드 웹 애플리케이션입니다. 다양한 시장 정보를 하나의 화면에서 직관적으로 파악하고, 사용자가 직접 대시보드를 커스터마이징하여 투자 효율을 높일 수 있도록 설계되었습니다.
 
 ## 🚀 기술 스택 (Tech Stack)
@@ -15,6 +17,11 @@
     *   **Development Env:** Vite
     *   **Layout:** `react-grid-layout`을 활용한 동적 그리드 시스템
     *   **Data Visualization:** `d3.js`를 이용한 인터랙티브 차트
+
+## 🔗 바로가기 (Quick Links)
+
+*   **라이브 데모 (Live Demo):** [애플리케이션 바로가기](https://your-live-server-url.com)
+*   **프로젝트 명세서 (Docs):** [상세 명세서 보기](https://your-docs-url.com)
 
 ## ✨ 주요 기능 (Features)
 
@@ -38,3 +45,15 @@
     *   **지표 텍스트 (TextWidget):** 코스피, 코스닥 등 주요 지수를 텍스트로 표시합니다.
     *   **메모장 (MemoWidget):** 간단한 메모를 작성하고 저장할 수 있습니다.
     *   **관심종목 (WatchlistWidget):** 나만의 관심 종목 리스트를 관리할 수 있습니다.
+
+### 3. Known Issue
+*   **코스피/코스닥 지표 차트가 휴일에는 작동하지 않음.
+
+## 🔮 향후 개선 과제 (Future Plans)
+
+*   **신규 위젯 타입 개발**
+    *   **기술적 분석 위젯:** 이동평균선(MA), RSI, MACD 등 기술적 분석 지표를 시각화하는 차트 위젯을 추가하여 심층적인 분석을 지원할 계획입니다.
+    *   **시장 데이터 위젯:** 주요 공시, 뉴스 피드, 환율 차트 등 시장 상황을 종합적으로 파악할 수 있는 위젯을 개발합니다.
+    *   **포트폴리오 위젯:** 사용자가 자신의 보유 종목을 등록하고 수익률을 관리할 수 있는 개인 포트폴리오 기능을 추가합니다.
+*   **외부 API 연동 기능**
+    *   위젯 설정에 '데이터 소스 URL' 항목을 추가하여, 사용자가 직접 외부 3rd-party API로부터 JSON 데이터를 가져와 대시보드에서 시각화할 수 있도록 기능을 확장합니다.
