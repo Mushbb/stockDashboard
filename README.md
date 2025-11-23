@@ -4,6 +4,11 @@
 
 '오늘의 국장'은 국내 주식 시장에 관심 있는 투자자들을 위한 개인화 대시보드 웹 애플리케이션입니다. 다양한 시장 정보를 하나의 화면에서 직관적으로 파악하고, 사용자가 직접 대시보드를 커스터마이징하여 투자 효율을 높일 수 있도록 설계되었습니다.
 
+## 🔗 바로가기 (Quick Links)
+
+*   **라이브 데모 (Live Demo):** [애플리케이션 바로가기](https://your-live-server-url.com)
+*   **프로젝트 명세서 (Docs):** [상세 명세서 보기](https://your-docs-url.com)
+
 ## 🚀 기술 스택 (Tech Stack)
 
 본 프로젝트는 백엔드와 프론트엔드가 분리된 모던 웹 아키텍처로 구성되었습니다.
@@ -17,11 +22,6 @@
     *   **Development Env:** Vite
     *   **Layout:** `react-grid-layout`을 활용한 동적 그리드 시스템
     *   **Data Visualization:** `d3.js`를 이용한 인터랙티브 차트
-
-## 🔗 바로가기 (Quick Links)
-
-*   **라이브 데모 (Live Demo):** [애플리케이션 바로가기](https://your-live-server-url.com)
-*   **프로젝트 명세서 (Docs):** [상세 명세서 보기](https://your-docs-url.com)
 
 ## ✨ 주요 기능 (Features)
 
