@@ -1,13 +1,13 @@
 # 오늘의 국장: 개인화 주식 대시보드 (Personalized Stock Dashboard)
 
-[![Documentation](https://img.shields.io/badge/📖-Documentation-blue)](https://docs.google.com/document/d/140_O0eGaRDloFZE8FHh0flYccWmB1o30j9PUTBHrmG0/edit?tab=t.0) [![Live Demo](https://img.shields.io/badge/🚀-Live%20Demo-brightgreen)](https://stockdashboard-e8gtedayc5bdgkch.koreacentral-01.azurewebsites.net/)
+[![Documentation](https://img.shields.io/badge/📖-Documentation-blue)](https://docs.google.com/document/d/140_O0eGaRDloFZE8FHh0flYccWmB1o30j9PUTBHrmG0) [![Live Demo](https://img.shields.io/badge/🚀-Live%20Demo-brightgreen)](https://stockdashboard-e8gtedayc5bdgkch.koreacentral-01.azurewebsites.net/)
 
 '오늘의 국장'은 국내 주식 시장에 관심 있는 투자자들을 위한 개인화 대시보드 웹 애플리케이션입니다. 다양한 시장 정보를 하나의 화면에서 직관적으로 파악하고, 사용자가 직접 대시보드를 커스터마이징하여 투자 효율을 높일 수 있도록 설계되었습니다.
 
 ## 🔗 바로가기 (Quick Links)
 
-*   **라이브 데모 (Live Demo):** [애플리케이션 바로가기](https://your-live-server-url.com)
-*   **프로젝트 명세서 (Docs):** [상세 명세서 보기](https://your-docs-url.com)
+*   **라이브 데모 (Live Demo):** [애플리케이션 바로가기](https://stockdashboard-e8gtedayc5bdgkch.koreacentral-01.azurewebsites.net/)
+*   **프로젝트 명세서 (Docs):** [상세 명세서 보기](https://docs.google.com/document/d/140_O0eGaRDloFZE8FHh0flYccWmB1o30j9PUTBHrmG0)
 
 ## 🚀 기술 스택 (Tech Stack)
 
