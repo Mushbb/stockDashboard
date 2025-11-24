@@ -42,6 +42,11 @@ public class DB_Utils {
 		return parsedData;
 	}
 	
+	/**
+	 * INSERT INTO SQL 쿼리 문자열에서 테이블 이름을 추출합니다.
+	 * @param sqlQuery 테이블 이름을 추출할 INSERT 쿼리
+	 * @return 추출된 테이블 이름, 실패 시 null
+	 */
 	public static String TableNameFromInsert(String sqlQuery) {
         if (sqlQuery == null || sqlQuery.trim().isEmpty()) {
             return null;

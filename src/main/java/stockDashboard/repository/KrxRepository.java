@@ -16,16 +16,25 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 주식 시장(KRX) 데이터베이스와 상호작용하는 리포지토리입니다.
+ * 'app' 데이터 소스에 연결된 JdbcTemplate을 사용하여 주식 시세, 종목 정보 등을 조회합니다.
+ */
 @Repository
 public class KrxRepository {
 	private final JdbcTemplate jdbcTemplate;
 
+	/**
+     * KrxRepository 생성자입니다.
+     * @param jdbcTemplate 'appDataSource'에 연결된 기본 JdbcTemplate
+     */
     public KrxRepository(@Qualifier("appJdbcTemplate") JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
 	/**
 	 * 특정 종목의 지정된 날짜 이후 시세 이력을 조회합니다.
+	 * 각 날짜의 가장 마지막 데이터를 기준으로 집계합니다.
 	 * @param symbol 종목코드
 	 * @param startDate 조회 시작 날짜
 	 * @return 시세 이력 DTO 리스트
@@ -53,7 +62,7 @@ public class KrxRepository {
 	}
 	
 	/**
-	 * 가장 최근 날짜의 장중 시장 데이터를 시가총액 순으로 조회합니다.
+	 * 가장 최근 날짜의 실시간 장중 시장 데이터를 시가총액 순으로 조회합니다.
 	 * @return 실시간 시장 데이터 DTO 리스트
 	 */
 	public List<MarketDataDto> getLiveMarketData() {
@@ -91,6 +100,8 @@ public class KrxRepository {
 
 	/**
 	 * 특정 날짜의 장 마감 후 시장 데이터를 시가총액 순으로 조회합니다.
+	 * @param date 조회할 특정 과거 날짜
+	 * @return 해당 날짜의 시장 데이터 DTO 리스트
 	 */
 	public List<MarketDataDto> getClosedMarketDataByDate(LocalDate date) {
 		String sql = """
@@ -120,6 +131,11 @@ public class KrxRepository {
 		return mapResultsToMarketDataDto(results);
 	}
 
+	/**
+	 * DB 조회 결과를 PriceHistoryDto 리스트로 변환하는 헬퍼 메서드입니다.
+	 * @param results jdbcTemplate.queryForList()의 결과
+	 * @return 변환된 PriceHistoryDto 리스트
+	 */
 	private List<PriceHistoryDto> mapResultsToPriceHistoryDto(List<Map<String, Object>> results) {
 		List<PriceHistoryDto> priceHistoryList = new ArrayList<>();
 		for (Map<String, Object> row : results) {
@@ -141,6 +157,11 @@ public class KrxRepository {
 		return priceHistoryList;
 	}
 
+	/**
+	 * DB 조회 결과를 MarketDataDto 리스트로 변환하는 헬퍼 메서드입니다.
+	 * @param results jdbcTemplate.queryForList()의 결과
+	 * @return 변환된 MarketDataDto 리스트
+	 */
 	private List<MarketDataDto> mapResultsToMarketDataDto(List<Map<String, Object>> results) {
 		List<MarketDataDto> marketDataList = new ArrayList<>();
 
@@ -166,6 +187,13 @@ public class KrxRepository {
 	}
 
     // --- Helper methods for safe type casting ---
+
+	/**
+	 * Map에서 키에 해당하는 값을 Long으로 안전하게 변환합니다.
+	 * @param row 데이터 행 Map
+	 * @param key 조회할 키
+	 * @return 변환된 Long 값, 실패 시 null
+	 */
     private Long getLongValue(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value instanceof Number) {
@@ -174,6 +202,12 @@ public class KrxRepository {
         return null;
     }
 
+	/**
+	 * Map에서 키에 해당하는 값을 Double로 안전하게 변환합니다.
+	 * @param row 데이터 행 Map
+	 * @param key 조회할 키
+	 * @return 변환된 Double 값, 실패 시 null
+	 */
     private Double getDoubleValue(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value instanceof Number) {
@@ -182,6 +216,12 @@ public class KrxRepository {
         return null;
     }
 
+	/**
+	 * Map에서 키에 해당하는 값을 LocalDate로 안전하게 변환합니다.
+	 * @param row 데이터 행 Map
+	 * @param key 조회할 키
+	 * @return 변환된 LocalDate 값, 실패 시 null
+	 */
     private LocalDate getLocalDateValue(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value instanceof Date) {
@@ -190,6 +230,12 @@ public class KrxRepository {
         return null;
     }
 
+	/**
+	 * Map에서 키에 해당하는 값을 LocalDateTime으로 안전하게 변환합니다.
+	 * @param row 데이터 행 Map
+	 * @param key 조회할 키
+	 * @return 변환된 LocalDateTime 값, 실패 시 null
+	 */
     private LocalDateTime getLocalDateTimeValue(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value instanceof Timestamp) {
@@ -201,7 +247,7 @@ public class KrxRepository {
 	/**
 	 * 종목 코드로 현재 종목명을 조회합니다.
 	 * @param symbol 종목코드
-	 * @return 종목명
+	 * @return 종목명, 없는 경우 null
 	 */
 	public String getStockNameBySymbol(String symbol) {
 		String sql = "SELECT value FROM stock_history WHERE stock_id = ? AND history_type = 'NAME' AND end_date IS NULL";
@@ -230,13 +276,18 @@ public class KrxRepository {
                 	AND h.value LIKE ?
                 """;
         
-        Object[] params = { "%" + query + "%" };		return jdbcTemplate.query(sql, (rs, rowNum) -> new StockSearchDto(
+        Object[] params = { "%" + query + "%" };
+		return jdbcTemplate.query(sql, (rs, rowNum) -> new StockSearchDto(
 			rs.getString("symbol"),
 			rs.getString("name")
 		), params);
 	}
 
-
+	/**
+	 * 제공된 종목 코드 리스트에 대한 최신 시장 데이터를 조회합니다.
+	 * @param symbols 조회할 종목 코드 리스트
+	 * @return 각 종목의 최신 시장 데이터 DTO 리스트
+	 */
 	public List<MarketDataDto> findLatestMarketDataBySymbols(List<String> symbols) {
         if (symbols == null || symbols.isEmpty()) {
             return new ArrayList<>();

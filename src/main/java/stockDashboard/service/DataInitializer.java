@@ -25,6 +25,12 @@ public class DataInitializer implements CommandLineRunner {
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * 애플리케이션이 시작될 때 실행됩니다.
+     * 기본 관리자 계정('admin')이 없는 경우, 초기 비밀번호로 생성합니다.
+     * @param args 애플리케이션 실행 시 전달되는 인자
+     * @throws Exception 실행 중 발생할 수 있는 예외
+     */
     @Override
     public void run(String... args) throws Exception {
         String username = "admin";

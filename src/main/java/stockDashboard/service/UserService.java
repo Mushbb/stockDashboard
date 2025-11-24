@@ -3,17 +3,17 @@ package stockDashboard.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
-import lombok.RequiredArgsConstructor;
 import stockDashboard.repository.WidgetRepository;
 
+/**
+ * 사용자 관련 비즈니스 로직을 처리하는 서비스입니다.
+ * 신규 사용자 등록 및 초기 데이터 설정을 담당합니다.
+ */
 @Service
 public class UserService {
 
@@ -23,6 +23,15 @@ public class UserService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper; // Jackson ObjectMapper 주입
 
+    /**
+     * UserService 생성자입니다.
+     * 사용자 관리, 비밀번호 인코딩, 위젯 저장소, DB 접근 및 JSON 처리를 위한 의존성을 주입받습니다.
+     * @param userDetailsManager Spring Security의 사용자 관리 매니저
+     * @param passwordEncoder 비밀번호 암호화 인코더
+     * @param widgetRepository 위젯 데이터 저장을 위한 저장소
+     * @param jdbcTemplate 인증 DB에 접근하기 위한 JdbcTemplate
+     * @param objectMapper Java 객체와 JSON 간의 변환을 위한 ObjectMapper
+     */
     public UserService(UserDetailsManager userDetailsManager, 
                      PasswordEncoder passwordEncoder, 
                      WidgetRepository widgetRepository, 
@@ -35,6 +44,14 @@ public class UserService {
         this.objectMapper = objectMapper; // 주입받은 objectMapper 할당
     }
     
+    /**
+     * 새로운 사용자를 시스템에 등록합니다.
+     * 사용자 생성 후, 해당 사용자를 위한 기본 대시보드 위젯을 함께 생성합니다.
+     * @param username 신규 사용자 이름
+     * @param password 신규 사용자 비밀번호
+     * @throws IllegalArgumentException 이미 존재하는 사용자 이름일 경우 발생
+     * @throws IllegalStateException 사용자 생성 후 DB에서 ID를 찾지 못했을 경우 발생
+     */
     public void registerNewUser(String username, String password) {
         if (userDetailsManager.userExists(username)) {
             throw new IllegalArgumentException("이미 존재하는 사용자 이름입니다: " + username);
@@ -55,6 +72,12 @@ public class UserService {
         addDefaultWidgetsForUser(newUserId);
     }
 
+    /**
+     * 신규 사용자를 위해 기본 대시보드 위젯들을 생성합니다.
+     * '통합 시장 현황' 트리맵과 '등락률 Top & Bottom' 순위 테이블을 기본 위젯으로 추가합니다.
+     * @param userId 위젯을 할당할 사용자의 ID
+     * @throws RuntimeException 위젯 설정 객체를 JSON 문자열로 변환하는 데 실패할 경우 발생
+     */
     private void addDefaultWidgetsForUser(long userId) {
         try {
             // 통합 시장 트리맵

@@ -21,7 +21,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import stockDashboard.dto.MarketDataDto;
 import stockDashboard.dto.RankItemDto;
@@ -30,6 +29,11 @@ import stockDashboard.dto.TreemapNodeDto;
 import stockDashboard.dto.TreemapSectorDto;
 import stockDashboard.repository.KrxRepository;
 
+/**
+ * 대시보드에 필요한 각종 데이터를 조회, 가공 및 캐싱하는 서비스입니다.
+ * 주기적으로 KRX 데이터를 가져와 실시간 순위, 트리맵 데이터 등을 생성하고 캐시에 저장하여
+ * API 요청 시 빠른 응답을 가능하게 합니다.
+ */
 @Slf4j
 @Service
 public class DashboardService {
@@ -41,14 +45,25 @@ public class DashboardService {
         this.objectMapper = objectMapper;
     }
 	
-	// 스레드 안전한 ConcurrentHashMap을 캐시 저장소로 사용
+	/**
+     * 대시보드 데이터를 저장하는 인메모리 캐시입니다.
+     * 스레드에 안전한 ConcurrentHashMap을 사용하여 동시성 문제를 방지합니다.
+     * 키(String)는 데이터의 종류를 나타내고, 값(Object)은 실제 데이터입니다.
+     */
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
 
+    /**
+     * 애플리케이션 시작 시 캐시를 초기화합니다.
+     */
     @PostConstruct
     public void initCache() {
         updateMarketDataCache();
     }
 
+    /**
+     * 5분마다 실행되어 시장 데이터 캐시를 주기적으로 업데이트합니다.
+     * 주식/ETF 데이터, 순위 데이터, 코스피/코스닥 지수 정보를 조회하여 캐시에 저장합니다.
+     */
     @Scheduled(fixedRate = 300000) // 5분
     public void updateMarketDataCache() {
         log.info("시장 데이터 캐시 업데이트를 시작합니다...");
@@ -83,9 +98,9 @@ public class DashboardService {
     }
 
     /**
-     * KRX에서 코스피 또는 코스닥 지수 정보를 가져옵니다.
-     * @param idxIndMidclssCd "02" for KOSPI, "03" for KOSDAQ
-     * @return 지수 정보 Map (Optional)
+     * KRX 정보데이터 시스템에서 코스피 또는 코스닥 지수 정보를 HTTP 요청으로 가져옵니다.
+     * @param idxIndMidclssCd 지수 구분 코드 ("02" for KOSPI, "03" for KOSDAQ)
+     * @return 조회된 지수 정보를 담은 Map 객체 (Optional)
      */
     private java.util.Optional<Map<String, String>> fetchIndexData(String idxIndMidclssCd) {
         try {
@@ -140,12 +155,26 @@ public class DashboardService {
         }
         return java.util.Optional.empty();
     }
+
+    /**
+     * 캐시에서 트리맵 데이터를 조회합니다.
+     * @param marketType 조회할 시장 타입 (e.g., "KOSPI", "KOSDAQ")
+     * @return 캐시된 TreemapDto 객체
+     */
     public TreemapDto getTreemapData(String marketType) {
         String cacheKey = "treemap_" + marketType.toUpperCase();
         log.info("캐시에서 {} 키로 트리맵 데이터를 조회합니다.", cacheKey);
         return (TreemapDto) cache.get(cacheKey);
     }
 
+    /**
+     * 캐시에서 순위 데이터를 조회합니다.
+     * @param by 정렬 기준 (e.g., "MARKET_CAP")
+     * @param market 시장 구분 (e.g., "KOSPI")
+     * @param order 정렬 순서 (e.g., "DESC")
+     * @param limit 반환할 최대 개수
+     * @return 캐시된 RankItemDto 리스트
+     */
     @SuppressWarnings("unchecked")
     public List<RankItemDto> getRankData(String by, String market, String order, int limit) {
         String cacheKey = String.format("rank_%s_%s_%s", market.toUpperCase(), by.toUpperCase(), order.toUpperCase());
@@ -157,6 +186,12 @@ public class DashboardService {
         return cachedData.stream().limit(limit).toList();
     }
     
+    /**
+     * 캐시에서 등락률 상위/하위 순위 데이터를 조회합니다.
+     * @param market 시장 구분 (e.g., "ALL")
+     * @param limit 반환할 최대 개수
+     * @return 등락률 상위/하위 RankItemDto 리스트
+     */
     @SuppressWarnings("unchecked")
     public List<RankItemDto> getTopAndBottomRankData(String market, int limit) {
         String cacheKey = String.format("rank_%s_CHANGE_RATE_TOP_AND_BOTTOM", market.toUpperCase());
@@ -180,6 +215,15 @@ public class DashboardService {
         return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
     }
 
+    /**
+     * 실시간 시장 데이터 리스트를 기반으로 정렬된 순위 데이터를 생성합니다.
+     * @param flatData 필터링 및 정렬할 전체 시장 데이터
+     * @param market 시장 구분
+     * @param by 정렬 기준
+     * @param order 정렬 순서
+     * @param limit 생성할 최대 개수
+     * @return 정렬된 RankItemDto 리스트
+     */
     private List<RankItemDto> createRankData(List<MarketDataDto> flatData, String market, String by, String order, int limit) {
         List<MarketDataDto> filteredData = flatData.stream()
                 .filter(d -> "ALL".equalsIgnoreCase(market) || market.equalsIgnoreCase(d.marketType()))
@@ -212,12 +256,26 @@ public class DashboardService {
                 .toList();
     }
 
+    /**
+     * 등락률 상위/하위 데이터를 생성하여 하나의 리스트로 결합합니다.
+     * @param flatData 전체 시장 데이터
+     * @param market 시장 구분
+     * @param limit 생성할 최대 개수
+     * @return 등락률 상위/하위 데이터가 결합된 리스트
+     */
     private List<RankItemDto> createTopAndBottomRankData(List<MarketDataDto> flatData, String market, int limit) {
         List<RankItemDto> top = createRankData(flatData, market, "CHANGE_RATE", "DESC", limit);
         List<RankItemDto> bottom = createRankData(flatData, market, "CHANGE_RATE", "ASC", limit);
         return java.util.stream.Stream.concat(top.stream(), bottom.stream()).toList();
     }
     
+    /**
+     * 평탄화된 시장 데이터를 트리맵 구조로 변환합니다.
+     * 데이터를 섹터별로 그룹화하고, 각 섹터 아래에 개별 종목 노드를 추가합니다.
+     * @param flatData 변환할 전체 시장 데이터
+     * @param marketName 시장 이름 (e.g., "KOSPI")
+     * @return 트리맵 구조를 나타내는 TreemapDto 객체
+     */
     private TreemapDto transformToTreemapDto(List<MarketDataDto> flatData, String marketName) {
         List<MarketDataDto> marketSpecificData;
         if ("ETF".equalsIgnoreCase(marketName) || "ALL".equalsIgnoreCase(marketName)) {
@@ -259,6 +317,11 @@ public class DashboardService {
         return new TreemapDto(rootName, sectorChildren);
     }
 
+    /**
+     * 프론트엔드에서 요청한 여러 데이터 키에 해당하는 데이터들을 캐시에서 조회하여 반환합니다.
+     * @param dataKeys 조회할 데이터의 키 리스트
+     * @return 데이터 키와 실제 데이터 객체로 구성된 Map
+     */
     public Map<String, Object> getDynamicData(List<String> dataKeys) {
         if (dataKeys == null || dataKeys.isEmpty()) {
             return Map.of();

@@ -9,8 +9,6 @@ package stockDashboard.dto;
  * @param low         저가
  * @param close       종가
  * @param volume      거래량
- * @param instVol     기관 순매수량
- * @param foreignVol  외국인 순매수량
  */
 public record PriceHistoryDto(
     String time,
