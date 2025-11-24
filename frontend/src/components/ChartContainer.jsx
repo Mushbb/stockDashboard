@@ -1,8 +1,17 @@
 import React, { memo } from 'react';
 
 /**
- * 위젯의 공통적인 시각적 스타일(테두리, 배경 등)을 제공하는 단순한 컨테이너 컴포넌트입니다.
- * 드래그, 리사이즈 등 모든 동적 기능은 react-grid-layout이 담당합니다.
+ * 모든 위젯을 감싸는 공통 컨테이너 컴포넌트입니다.
+ * 위젯의 제목 표시줄, 편집 버튼, 테두리 등 공통적인 UI를 제공합니다.
+ * 제목 표시줄은 react-grid-layout의 드래그 핸들 역할을 합니다.
+ * @param {object} props - 컴포넌트 속성
+ * @param {string} props.widgetId - 위젯의 고유 ID
+ * @param {string} props.title - 위젯의 제목
+ * @param {boolean} props.isEditMode - 현재 대시보드가 편집 모드인지 여부
+ * @param {function|null} props.onRename - 이름 변경 버튼 클릭 시 호출되는 함수
+ * @param {function} props.onDelete - 삭제 버튼 클릭 시 호출되는 함수
+ * @param {function|null} props.onSettings - 설정 버튼 클릭 시 호출되는 함수
+ * @param {React.ReactNode} props.children - 위젯의 실제 컨텐츠
  */
 const ChartContainer = memo(({ widgetId, title, isEditMode, onRename, onDelete, onSettings, children }) => {
 	return (

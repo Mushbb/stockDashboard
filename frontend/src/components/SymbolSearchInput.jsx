@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+/**
+ * 주식 종목을 검색하고 선택할 수 있는 입력 컴포넌트입니다.
+ * 처음에는 '종목 추가' 버튼으로 보이며, 클릭하면 검색창으로 변합니다.
+ * @param {object} props - 컴포넌트 속성
+ * @param {function(object): void} props.onSymbolSelect - 사용자가 검색 결과에서 종목을 선택했을 때 호출되는 함수. 선택된 종목 객체를 인자로 받습니다.
+ */
 const SymbolSearchInput = ({ onSymbolSelect }) => {
-    const [isActive, setIsActive] = useState(false);
-    const [query, setQuery] = useState('');
-    const [results, setResults] = useState([]);
+    const [isActive, setIsActive] = useState(false); // 검색창 활성화 여부
+    const [query, setQuery] = useState(''); // 검색어
+    const [results, setResults] = useState([]); // 검색 결과
     const searchContainerRef = useRef(null);
 
-    // Search effect
+    /** 검색어(query)가 변경될 때마다 디바운싱을 적용하여 검색 API를 호출합니다. */
     useEffect(() => {
         if (query.length < 2) {
             setResults([]);
@@ -21,7 +27,7 @@ const SymbolSearchInput = ({ onSymbolSelect }) => {
         return () => clearTimeout(debounceTimer);
     }, [query]);
 
-    // Outside click detector
+    /** 컴포넌트 외부를 클릭하면 검색창을 닫습니다. */
     useEffect(() => {
         function handleClickOutside(event) {
             if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
@@ -33,6 +39,7 @@ const SymbolSearchInput = ({ onSymbolSelect }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [searchContainerRef]);
 
+    /** 검색 결과에서 특정 종목을 선택했을 때 실행되는 핸들러입니다. */
     const handleSelect = (stock) => {
         onSymbolSelect(stock);
         setQuery('');
@@ -60,23 +67,12 @@ const SymbolSearchInput = ({ onSymbolSelect }) => {
             />
             {results.length > 0 && (
                 <ul style={{ 
-                    position: 'absolute', 
-                    top: '100%', 
-                    left: 0, 
-                    right: 0, 
-                    background: 'white', 
-                    border: '1px solid #ccc', 
-                    listStyle: 'none', 
-                    padding: 0, 
-                    margin: 0, 
-                    zIndex: 10 
+                    position: 'absolute', top: '100%', left: 0, right: 0, 
+                    background: 'white', border: '1px solid #ccc', 
+                    listStyle: 'none', padding: 0, margin: 0, zIndex: 10 
                 }}>
                     {results.map(item => (
-                        <li 
-                            key={item.symbol} 
-                            onClick={() => handleSelect(item)}
-                            style={{ padding: '8px 10px', cursor: 'pointer' }}
-                        >
+                        <li key={item.symbol} onClick={() => handleSelect(item)} style={{ padding: '8px 10px', cursor: 'pointer' }}>
                             {item.name} <span style={{color: '#888'}}>({item.symbol})</span>
                         </li>
                     ))}

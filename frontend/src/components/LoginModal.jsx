@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
+/**
+ * 로그인 및 회원가입 UI를 제공하는 모달 컴포넌트입니다.
+ * @param {object} props - 컴포넌트 속성
+ * @param {function} props.onClose - 모달을 닫을 때 호출되는 함수
+ */
 export const LoginModal = ({ onClose }) => {
     const [isRegister, setIsRegister] = useState(false);
     const [username, setUsername] = useState('');
@@ -8,12 +13,17 @@ export const LoginModal = ({ onClose }) => {
     const [error, setError] = useState('');
     const { login } = useAuth();
 
+    /**
+     * 폼 제출 시 호출되는 핸들러입니다.
+     * 'isRegister' 상태에 따라 회원가입 또는 로그인 API를 호출합니다.
+     * @param {React.FormEvent} e - 폼 제출 이벤트 객체
+     */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         try {
             if (isRegister) {
-                // 회원가입
+                // 회원가입 로직
                 const response = await fetch('/api/users/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -21,9 +31,9 @@ export const LoginModal = ({ onClose }) => {
                 });
                 if (!response.ok) throw new Error('Registration failed');
                 alert('회원가입이 완료되었습니다. 로그인해주세요.');
-                setIsRegister(false); // 로그인 폼으로 전환
+                setIsRegister(false); // 로그인 폼으로 자동 전환
             } else {
-                // 로그인
+                // 로그인 로직
                 await login(username, password);
                 onClose(); // 성공 시 모달 닫기
             }
@@ -36,7 +46,7 @@ export const LoginModal = ({ onClose }) => {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }} onClick={onClose}>
             <div style={{
                 position: 'absolute',
-                top: '60px', // Changed to fixed pixel value
+                top: '60px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: 'white', 

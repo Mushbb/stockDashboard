@@ -1,6 +1,13 @@
 import React, { memo, useState, useEffect } from 'react';
 import * as TradingView from 'react-tradingview-embed';
 
+/**
+ * SymbolChartWidget의 설정을 변경하는 모달 컴포넌트입니다.
+ * @param {object} props - 컴포넌트 속성
+ * @param {object} props.settings - 현재 위젯의 설정 객체
+ * @param {function} props.onSave - '저장' 버튼 클릭 시 호출되는 함수
+ * @param {function} props.onClose - 모달을 닫을 때 호출되는 함수
+ */
 const SettingsModal = ({ settings, onSave, onClose }) => {
     const [symbol, setSymbol] = useState(settings.symbol || 'AAPL');
     const [isLocked, setIsLocked] = useState(settings.isLocked || false);
@@ -33,25 +40,38 @@ const SettingsModal = ({ settings, onSave, onClose }) => {
     );
 };
 
+/**
+ * TradingView의 Advanced Chart를 임베드하여 보여주는 위젯입니다.
+ * 해외 주식, 암호화폐 등 TradingView에서 지원하는 모든 종목을 표시할 수 있습니다.
+ * @param {object} props - 컴포넌트 속성
+ * @param {string} props.widgetId - 위젯의 고유 ID
+ * @param {object} props.settings - 위젯의 설정값 (e.g., { symbol, isLocked })
+ * @param {function} props.onSettingsChange - 위젯 설정 변경 시 호출되는 함수
+ * @param {string|null} props.editingWidgetId - 현재 설정 중인 위젯의 ID
+ * @param {function} props.onCloseSettings - 설정 모달을 닫는 함수
+ * @param {number} props.width - 위젯의 너비
+ * @param {number} props.height - 위젯의 높이
+ */
 const SymbolChartWidget = ({ widgetId, settings, onSettingsChange, editingWidgetId, onCloseSettings, width, height }) => {
-    // const { selectedSymbol: dashboardSymbol } = useDashboard(); // 향후 컨텍스트에서 받을 전역 심볼
-    const dashboardSymbol = null; // 임시값
+    // TODO: 향후 대시보드 전체에서 공유되는 selectedSymbol을 컨텍스트로부터 받아 연동하는 기능 추가 예정
+    const dashboardSymbol = null;
 
     const { symbol: defaultSymbol = 'AAPL', isLocked = false } = settings;
     
-    // 이 위젯의 설정 모달이 열려있는지 여부
     const isSettingsOpen = editingWidgetId === widgetId;
 
-    // 위젯에 최종적으로 표시될 심볼. 잠겨있으면 자신의 기본 심볼, 아니면 대시보드 심볼을 따름.
+    // 'isLocked'가 true이면 위젯의 기본 심볼을 사용하고, false이면 대시보드의 전역 심볼을 따릅니다.
     const effectiveSymbol = isLocked ? defaultSymbol : (dashboardSymbol || defaultSymbol);
 
+    /** 설정 모달에서 '저장'을 눌렀을 때 호출됩니다. */
     const handleSaveSettings = (newSettings) => {
-        onSettingsChange(widgetId, newSettings); // 변경된 설정을 Dashboard.jsx로 전달
-        onCloseSettings(); // 모달 닫기 신호
+        onSettingsChange(widgetId, newSettings);
+        onCloseSettings();
     };
 
+    /** 설정 모달에서 '취소'나 배경을 클릭했을 때 호출됩니다. */
     const handleClose = () => {
-        onCloseSettings(); // 모달 닫기 신호
+        onCloseSettings();
     };
 
     return (
