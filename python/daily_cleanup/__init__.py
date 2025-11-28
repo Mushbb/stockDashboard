@@ -2,31 +2,37 @@ import os
 import pyodbc
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import azure.functions as func  # [필수] Azure 함수 패키지
+import logging  # [필수] 로그 패키지
 
 
-def cleanup_previous_day_metrics():
+# --- 핵심 로직 함수 (이름: cleanup_logic) ---
+def cleanup_logic():
 	"""
 	어제 날짜의 daily_metrics 데이터 중, 각 종목별 마지막 데이터를 제외하고 모두 삭제합니다.
 	"""
 	conn = None
 	try:
+		# 로컬 테스트를 위한 dotenv (Azure에서는 무시됨)
 		load_dotenv()
 		connection_string = os.getenv("SQL_CONNECTION_STRING")
+
 		if not connection_string:
+			# logging.error로 변경하여 Azure 로그에 빨간색으로 표시되게 함
 			raise ValueError("SQL_CONNECTION_STRING not found.")
 
 		conn = pyodbc.connect(connection_string)
 		cursor = conn.cursor()
 
-		# 어제 날짜를 'YYYY-MM-DD' 형식으로 계산
-		yesterday = datetime.now() - timedelta(days=1)
+		# [중요] Azure 서버 시간(UTC)을 한국 시간(KST)으로 변환
+		# 그냥 datetime.now()를 쓰면 한국 새벽 1시에 돌릴 때 '그저께' 날짜가 잡힐 수 있음
+		kst_now = datetime.utcnow() + timedelta(hours=9)
+		yesterday = kst_now - timedelta(days=1)
 		target_date_str = yesterday.strftime('%Y-%m-%d')
 
-		print(f"[{datetime.now()}] Starting cleanup for date: {target_date_str}")
+		logging.info(f"[{kst_now}] Starting cleanup for date: {target_date_str}")
 
-		# CTE(Common Table Expression)를 사용하여 각 종목별 마지막 레코드를 식별
-		# 1. target_date에 해당하는 각 ISU_SRT_CD 별로 가장 늦은 collected_at 시간을 찾습니다.
-		# 2. 이 정보를 바탕으로 해당 시간과 일치하지 않는 모든 레코드를 삭제합니다.
+		# CTE를 사용한 삭제 쿼리 (변경 없음)
 		cleanup_sql = """
          WITH FinalRecords AS (
              SELECT
@@ -48,16 +54,15 @@ def cleanup_previous_day_metrics():
              dm.metric_date = ? AND dm.collected_at < fr.final_collected_at;
          """
 
-		# SQL 실행
 		cursor.execute(cleanup_sql, target_date_str, target_date_str)
 		deleted_rows = cursor.rowcount
 		conn.commit()
 
-		print(f" - Successfully cleaned up {deleted_rows} intraday rows.")
-		print(f"[{datetime.now()}] Cleanup process finished.")
+		logging.info(f" - Successfully cleaned up {deleted_rows} intraday rows.")
+		logging.info("Cleanup process finished.")
 
 	except Exception as e:
-		print(f"An error occurred during cleanup: {e}")
+		logging.error(f"An error occurred during cleanup: {e}")
 		if conn:
 			conn.rollback()
 	finally:
@@ -65,5 +70,15 @@ def cleanup_previous_day_metrics():
 			conn.close()
 
 
-if __name__ == '__main__':
-	cleanup_previous_day_metrics()
+# --- Azure Functions 진입점 ---
+def main(mytimer: func.TimerRequest) -> None:
+	# 1. 타이머 트리거 시작 로그
+	if mytimer.past_due:
+		logging.info('The timer is past due!')
+
+	logging.info('Cleanup timer trigger function started.')
+
+	# 2. 위에서 정의한 청소 로직 실행
+	cleanup_logic()
+
+	logging.info('Cleanup timer trigger function finished.')
