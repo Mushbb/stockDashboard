@@ -28,6 +28,7 @@ import stockDashboard.dto.TreemapDto;
 import stockDashboard.dto.TreemapNodeDto;
 import stockDashboard.dto.TreemapSectorDto;
 import stockDashboard.repository.KrxRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * 대시보드에 필요한 각종 데이터를 조회, 가공 및 캐싱하는 서비스입니다.
@@ -98,60 +99,48 @@ public class DashboardService {
     }
 
     /**
-     * KRX 정보데이터 시스템에서 코스피 또는 코스닥 지수 정보를 HTTP 요청으로 가져옵니다.
-     * @param idxIndMidclssCd 지수 구분 코드 ("02" for KOSPI, "03" for KOSDAQ)
-     * @return 조회된 지수 정보를 담은 Map 객체 (Optional)
+     * 야후 파이낸스 API를 통해 코스피 또는 코스닥 지수 정보를 가져옵니다.
+     * @param symbol 지수 심볼 ("^KS11" for KOSPI, "^KQ11" for KOSDAQ)
+     * @return 조회된 지수 정보를 담은 Map 객체
      */
     private java.util.Optional<Map<String, String>> fetchIndexData(String idxIndMidclssCd) {
+    	String symbol = "02".equals(idxIndMidclssCd) ? "^KS11" : "^KQ11";
+    	String encodedSymbol = symbol.replace("^", "%5E");
         try {
+            // 야후 파이낸스 v8 API (가장 안정적입니다)
+            String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodedSymbol;
+            log.info("Requesting URL: {}", url);
+            
             HttpClient client = HttpClient.newHttpClient();
-            String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-
-            String formData = new java.util.StringJoiner("&")
-                    .add("bld=" + URLEncoder.encode("dbms/MDC/STAT/standard/MDCSTAT00101", StandardCharsets.UTF_8))
-                    .add("locale=ko_KR")
-                    .add("idxIndMidclssCd=" + URLEncoder.encode(idxIndMidclssCd, StandardCharsets.UTF_8))
-                    .add("trdDd=" + URLEncoder.encode(today, StandardCharsets.UTF_8))
-                    .add("share=2")
-                    .add("money=3")
-                    .add("csvxls_isNo=false")
-                    .toString();
-
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"))
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("Accept-Language", "ko,en;q=0.9,en-US;q=0.8")
-                    .header("Cache-Control", "no-cache")
-                    .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                    .header("Cookie", "__smVisitorID=gJNV0xI1RRT; JSESSIONID=HayrObIvzAAyborAtb3LdkU2w8WHPHaFkXghDRc1UaHCMdMllBdvyZCgY7wufpOV.bWRjX2RvbWFpbi9tZGNvd2FwMi1tZGNhcHAwMQ==")
-                    .header("Origin", "https://data.krx.co.kr")
-                    .header("Pragma", "no-cache")
-                    .header("Referer", "https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201010105")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0")
-                    .header("X-Requested-With", "XMLHttpRequest")
-                    .header("sec-ch-ua", "\"Microsoft Edge\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"")
-                    .header("sec-ch-ua-mobile", "?0")
-                    .header("sec-ch-ua-platform", "\"Windows\"")
-                    .header("sec-fetch-dest", "empty")
-                    .header("sec-fetch-mode", "cors")
-                    .header("sec-fetch-site", "same-origin")
-                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .uri(URI.create(url))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Mozilla/5.0") // 차단 방지를 위한 기본 헤더
+                    .GET()
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                Map<String, Object> jsonResponse = objectMapper.readValue(response.body(), new TypeReference<>() {});
-                List<Map<String, String>> output = (List<Map<String, String>>) jsonResponse.get("output");
-                if (output != null && !output.isEmpty()) {
-                    log.info("Successfully fetched index data for code: {}", idxIndMidclssCd);
-                    return java.util.Optional.of(output.get(1));
-                }
-            } else {
-                log.warn("Failed to fetch index data for code: {}. Status: {}", idxIndMidclssCd, response.statusCode());
+                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode meta = root.path("chart").path("result").get(0).path("meta");
+
+                double currentPrice = meta.path("regularMarketPrice").asDouble();
+                double previousClose = meta.path("previousClose").asDouble();
+                double change = currentPrice - previousClose;
+                double changeRate = (change / previousClose) * 100;
+
+                Map<String, String> resultMap = new java.util.HashMap<>();
+                // 기존 프론트엔드(TextWidget) 변수명에 맞춰 데이터 맵핑
+                resultMap.put("CLSPRC_IDX", String.format("%.2f", currentPrice));      // 현재가
+                resultMap.put("CMPPREVDD_IDX", String.format("%.2f", change));      // 전일대비
+                resultMap.put("FLUC_RT", String.format("%.2f", changeRate));        // 등락률
+
+                log.info("Successfully fetched index data for: {}", symbol);
+                return java.util.Optional.of(resultMap);
             }
-        } catch (IOException | InterruptedException e) {
-            log.error("Error while fetching index data for code: {}", idxIndMidclssCd, e);
+        } catch (Exception e) {
+            log.error("Error while fetching index data for symbol: {}", symbol, e);
         }
         return java.util.Optional.empty();
     }

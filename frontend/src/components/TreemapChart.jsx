@@ -186,11 +186,12 @@ function TreemapChart({ widgetId, settings, width, height, onSettingsChange }) {
 			const w = x(d.x1) - x(d.x0);
 			const h = y(d.y1) - y(d.y0);
 			if (w >= 40 && h >= 40) {
-				const fo = node.append('foreignObject').attr('width', w).attr('height', h);
-				const div = fo.append('xhtml:div').attr('class', 'treemap-label');
-				div.append('xhtml:p').text(d.data.name);
+                const fo = node.append('foreignObject').attr('width', w).attr('height', h);
+                const div = fo.append('xhtml:div').style('display', 'flex').style('flex-direction', 'column').style('align-items', 'center').style('justify-content', 'center').style('width', '100%').style('height', '100%').style('overflow', 'hidden').style('text-align', 'center').style('color', 'black').style('font-weight', 'bold')
+                    .style('font-size', `${Math.min(w / 6.5, h / 4, 50)}px`);
+                div.append('xhtml:p').style('margin', '0').style('padding', '0 2px').style('white-space', 'nowrap').style('overflow', 'hidden').style('display', 'inline-block').style('max-width', '100%').text(d.data.name);
 				const rate = d.data.fluc_rate || 0;
-				div.append('xhtml:p').text(`${rate > 0 ? '+' : ''}${rate.toFixed(2)}%`);
+				div.append('xhtml:p').style('margin', '2px 0 0 0').style('padding', '0').text(`${rate > 0 ? '+' : ''}${rate.toFixed(2)}%`);
 			}
 		});
         

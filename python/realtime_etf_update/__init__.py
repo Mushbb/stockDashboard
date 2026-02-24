@@ -17,7 +17,7 @@ KRX_HEADERS = {
 	'Accept-Language': 'ko,en;q=0.9,en-US;q=0.8',
 	'Connection': 'keep-alive',
 	'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-	'Cookie': '__smVisitorID=gJNV0xI1RRT; JSESSIONID=cyCLRovgeTyA6lzYQFFMtddUEsp9aBQeBf8aRRbw1Gv96mYLl0378g1tsAj7nGr0.bWRjX2RvbWFpbi9tZGNvd2FwMi1tZGNhcHAwMQ==',
+	'Cookie': '__smVisitorID=me7Gx9QJQYB; JSESSIONID=AOk7LGgIgTba2V041XxeAu6Usa97z13OBy2ELoKtzyqU1ya6tzzzCiJHHEbRQZyl.bWRjX2RvbWFpbi9tZGNvd2FwMS1tZGNhcHAxMQ==; mbrTranKo_popup=Y; lang=ko_KR; successJoinId=myajsajs; successJoinName=%EC%95%88%EC%A7%84%EC%84%9D; successJoinEmail=myajsajs%40naver.com; mdc.client_session=true',
 	'Host': 'data.krx.co.kr',
 	'Origin': 'https://data.krx.co.kr',
 	'Referer': 'https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201030101',
