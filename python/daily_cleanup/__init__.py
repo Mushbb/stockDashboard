@@ -8,10 +8,9 @@ import logging
 def cleanup_logic():
     conn = None
     try:
-        #load_dotenv()
-        #connection_string = os.getenv("SQL_CONNECTION_STRING")
-        #if not connection_string: raise ValueError("SQL_CONNECTION_STRING not found.")
-        connection_string = "Driver={ODBC Driver 17 for SQL Server};Server=kopo307.database.windows.net;Database=KRX_Stock;Uid=mushbb;Pwd=35691547a!;"
+        load_dotenv()
+        connection_string = os.getenv("SQL_CONNECTION_STRING")
+        if not connection_string: raise ValueError("SQL_CONNECTION_STRING not found.")
  
         conn = pyodbc.connect(connection_string)
         cursor = conn.cursor()

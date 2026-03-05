@@ -72,8 +72,10 @@ public class DashboardService {
             // 1. 주식 및 ETF 데이터 조회 및 캐싱
             List<MarketDataDto> liveMarketData = krxRepository.getLiveMarketData();
 
-            List<MarketDataDto> stockData = liveMarketData.stream().filter(d -> d.marketType() != null).toList();
-            List<MarketDataDto> etfData = liveMarketData.stream().filter(d -> d.marketType() == null).toList();
+            List<MarketDataDto> stockData = liveMarketData.stream()
+            	    .filter(d -> d.marketType() != null && d.sectorName() != null).toList();
+        	List<MarketDataDto> etfData = liveMarketData.stream()
+            	    .filter(d -> d.marketType() == null || d.sectorName() == null).toList();
 
             cache.put("treemap_KOSPI", transformToTreemapDto(stockData, "KOSPI"));
             cache.put("treemap_KOSDAQ", transformToTreemapDto(stockData, "KOSDAQ"));
